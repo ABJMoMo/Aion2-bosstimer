@@ -135,6 +135,22 @@
     .kv .k{color:var(--muted); font-size:12px}
     .kv .v{font-size:12px}
     .hr{height:1px;background:var(--line); margin:12px 0}
+
+    /* ===== UI Lock（同步中鎖定） ===== */
+    body.locked .controls,
+    body.locked .grid,
+    body.locked .tabs{
+      pointer-events:none;
+      opacity:.55;
+      filter:saturate(.8);
+    }
+    .lockBanner{
+      display:none;
+      margin-top:8px;
+      color:var(--muted);
+      font-size:12px;
+    }
+    body.locked .lockBanner{display:block}
   </style>
 </head>
 
@@ -149,11 +165,29 @@
       </div>
 
       <div class="roombar" style="margin-top:8px">
-        <span class="chip"><span class="statusDot" id="dot"></span><span id="cloudStatus">未連線</span></span>
+        <span class="chip">
+          <span class="statusDot" id="dot"></span>
+          <span id="cloudStatus">未連線</span>
+        </span>
+
+        <span class="chip" title="房主=建立房間者（meta.hostId）">
+          身分：<b id="roleLabel" class="mono">—</b>
+        </span>
+
+        <span class="chip" title="你是第幾個加入房間的人（meta.joinSeq）">
+          加入序：<b id="joinIndexLabel" class="mono">—</b>
+        </span>
+
+        <span class="chip" title="25 秒內有心跳視為在線（presence）">
+          線上：<b id="onlineLabel" class="mono">0</b>
+        </span>
+
         <input id="roomId" type="text" placeholder="Room ID（例如 aion2-01）" />
         <button class="btn primary" id="btnJoin">加入/建立房間</button>
         <button class="btn" id="btnCopyLink">複製房間連結</button>
       </div>
+
+      <div class="lockBanner" id="lockBanner">同步中，操作已暫時鎖定…</div>
     </div>
 
     <div class="controls">
@@ -322,9 +356,15 @@
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
+  import {
+    getFirestore,
+    doc, setDoc, getDoc, onSnapshot,
+    serverTimestamp,
+    collection,
+    runTransaction
+  } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
 
-  // ✅ 你的 Firebase config（原樣）
+  // ✅ 你的 Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
     authDomain: "aion-2-timer.firebaseapp.com",
@@ -339,11 +379,26 @@
   const db = getFirestore(app);
 
   // =========================
-  // 資料（BOSS 名稱 + 地區）
+  // Client ID（房主、加入序、線上狀態）
+  // =========================
+  const CLIENT_KEY = "aion2_bosstimer_client_id_v1";
+  function getClientId(){
+    let id = localStorage.getItem(CLIENT_KEY);
+    if(!id){
+      id = "c-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+      localStorage.setItem(CLIENT_KEY, id);
+    }
+    return id;
+  }
+  const clientId = getClientId();
+
+  // =========================
+  // 基本資料
   // =========================
   const now = () => Date.now();
   const uid = (p) => `${p}-${Math.random().toString(16).slice(2,9)}${Date.now().toString(16).slice(-4)}`;
 
+  // ✅ 你目前的預設 BOSS（可自行編輯/新增）
   const preset = {
     channels: [
       { name:"天族", bosses:[
@@ -401,13 +456,13 @@
       { name:"深淵", bosses:[
         ["監視者卡伊拉",60,60,"艾雷修藍塔下層","活動模式時間不變（出現機率↑）"],
         ["精靈王阿格羅",1440,720,"希埃爾之翼群島 / 希埃爾右翼",""],
-        ["守護神將納赫瑪",0,0,"艾雷修藍塔之根","週末規則：需手動擊殺後計時（此版先提示）"],
+        ["守護神將納赫瑪",0,0,"艾雷修藍塔之根","需手動擊殺後計時（此版先提示）"],
       ]},
     ]
   };
 
   const defaultState = () => ({
-    version: 6,
+    version: 7,
     settings: { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false },
     activeChannelId: "ch-0",
     channels: preset.channels.map((ch, idx) => ({
@@ -428,21 +483,19 @@
   });
 
   // =========================
-  // 本機暫存
+  // LocalStorage（資料 + UI 偏好）
   // =========================
-  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v6";
+  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v7";
   const loadLocal = () => { try { const raw = localStorage.getItem(LOCAL_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
   const saveLocal = (s) => localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
 
-  // 本機 UI 偏好（不同步）
-  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v5";
+  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v6";
   const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
   const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
   let uiPref = loadUI() || { font: "md", onlyFav: false, soundWarn: "sharp", soundSpawn: "double" };
 
   let state = loadLocal() || defaultState();
 
-  // 向下相容：補欄位
   function normalizeState(s){
     if(!s || !s.channels) return s;
     for(const ch of s.channels){
@@ -468,26 +521,123 @@
   saveLocal(state);
 
   // =========================
-  // Firestore 房間同步
+  // Firestore：房間同步 + presence
   // =========================
   let roomId = "";
-  let unsub = null;
-  let applyingRemote = false;
+  let unsubRoom = null;
 
   const roomDocRef = () => doc(db, "rooms", roomId);
+  const presenceColRef = () => collection(db, "rooms", roomId, "presence");
+  const presenceDocRef = () => doc(db, "rooms", roomId, "presence", clientId);
 
-  async function ensureRoomExists(){
-    const ref = roomDocRef();
-    const snap = await getDoc(ref);
-    if(!snap.exists()){
-      await setDoc(ref, { state, updatedAt: serverTimestamp() }, { merge: true });
-    }
+  // UI：身分/加入序/線上數
+  const roleLabel = document.querySelector("#roleLabel");
+  const joinIndexLabel = document.querySelector("#joinIndexLabel");
+  const onlineLabel = document.querySelector("#onlineLabel");
+
+  let isHost = false;
+  let joinIndex = null;
+
+  // UI lock
+  const lockBanner = document.querySelector("#lockBanner");
+  function setLocked(lock, text){
+    document.body.classList.toggle("locked", !!lock);
+    if(text) lockBanner.textContent = text;
   }
 
-  function startListen(){
-    if(unsub) unsub();
+  // cloud status chip
+  const dot = document.querySelector("#dot");
+  const cloudStatus = document.querySelector("#cloudStatus");
+  function setCloudStatus(text, ok=null){
+    cloudStatus.textContent = text;
+    dot.classList.toggle("ok", ok === true);
+    dot.classList.toggle("bad", ok === false);
+  }
+
+  // presence / heartbeat
+  let unsubPresence = null;
+  let presenceTimer = null;
+
+  async function startPresence(){
+    await setDoc(presenceDocRef(), {
+      clientId,
+      lastSeen: serverTimestamp(),
+      joinedAt: serverTimestamp()
+    }, { merge: true });
+
+    if(presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = setInterval(async () => {
+      try{
+        await setDoc(presenceDocRef(), { lastSeen: serverTimestamp() }, { merge: true });
+      }catch(_e){}
+    }, 10000);
+
+    if(unsubPresence) unsubPresence();
+    unsubPresence = onSnapshot(presenceColRef(), (snap) => {
+      const nowMs = Date.now();
+      let alive = 0;
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const ts = d?.lastSeen?.toMillis ? d.lastSeen.toMillis() : 0;
+        if(ts && (nowMs - ts) <= 25000) alive++;
+      });
+      onlineLabel.textContent = String(alive);
+    }, (err) => {
+      console.warn("presence 監聽失敗：", err);
+      onlineLabel.textContent = "0";
+    });
+  }
+
+  function stopPresence(){
+    if(unsubPresence){ unsubPresence(); unsubPresence = null; }
+    if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
+  }
+
+  // ✅ 這裡用 Transaction：建立房間 meta（hostId/joinSeq）並返回加入序
+  async function ensureRoomAndJoinMeta(){
     const ref = roomDocRef();
-    unsub = onSnapshot(ref, (snap) => {
+    const result = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const existed = snap.exists();
+
+      if(!existed){
+        const hostId = clientId;
+        tx.set(ref, {
+          meta: { hostId, joinSeq: 1, createdAt: serverTimestamp() },
+          state,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        return { existed:false, hostId, joinIndex:1 };
+      }
+
+      const data = snap.data() || {};
+      const hostId = data?.meta?.hostId || null;
+      const seq = Number(data?.meta?.joinSeq || 0) + 1;
+
+      tx.set(ref, { meta: { joinSeq: seq } }, { merge: true });
+      return { existed:true, hostId, joinIndex:seq };
+    });
+
+    joinIndex = result.joinIndex;
+    isHost = (result.hostId === clientId);
+
+    roleLabel.textContent = isHost ? "房主" : "成員";
+    joinIndexLabel.textContent = String(joinIndex);
+
+    return result.existed;
+  }
+
+  let applyingRemote = false;
+  let firstSnapshotArrived = false;
+
+  function startRoomListen(){
+    if(unsubRoom) unsubRoom();
+    const ref = roomDocRef();
+
+    firstSnapshotArrived = false;
+
+    unsubRoom = onSnapshot(ref, (snap) => {
       if(!snap.exists()) return;
       const data = snap.data();
       if(!data?.state) return;
@@ -497,10 +647,24 @@
       saveLocal(state);
       render();
       applyingRemote = false;
-      setCloudOk(true);
+
+      if(!firstSnapshotArrived){
+        firstSnapshotArrived = true;
+        setLocked(false);
+      }
+
+      // 更新房主顯示（若 meta.hostId 存在）
+      const hostId = data?.meta?.hostId;
+      if(hostId){
+        isHost = (hostId === clientId);
+        roleLabel.textContent = isHost ? "房主" : "成員";
+      }
+
+      setCloudStatus("已同步完成", true);
     }, (err) => {
       console.error(err);
-      setCloudOk(false, "連線失敗（看 Console/Rules）");
+      setCloudStatus("連線失敗（看 Console/Rules）", false);
+      setLocked(false);
     });
   }
 
@@ -509,15 +673,15 @@
     if(applyingRemote) return;
     try{
       await setDoc(roomDocRef(), { state, updatedAt: serverTimestamp() }, { merge: true });
-      setCloudOk(true);
+      setCloudStatus("已同步完成", true);
     }catch(e){
       console.error(e);
-      setCloudOk(false, "寫入失敗（看 Rules）");
+      setCloudStatus("寫入失敗（看 Rules/Console）", false);
     }
   }
 
   // =========================
-  // UI/倒數
+  // UI / 倒數
   // =========================
   const $ = (q) => document.querySelector(q);
   const tabsEl = $("#tabs");
@@ -538,18 +702,9 @@
   const selSoundWarn = $("#selSoundWarn");
   const selSoundSpawn = $("#selSoundSpawn");
 
-  const dot = $("#dot");
-  const cloudStatus = $("#cloudStatus");
-
   const btnExport = $("#btnExport");
   const btnImport = $("#btnImport");
   const fileImport = $("#fileImport");
-
-  function setCloudOk(ok, msg){
-    dot.classList.toggle("ok", !!ok);
-    dot.classList.toggle("bad", ok===false);
-    cloudStatus.textContent = msg || (ok ? "已連線" : "未連線");
-  }
 
   // ===== 提示音（選單 + 不同狀態）=====
   let audioCtx = null;
@@ -695,15 +850,13 @@
     const today = new Date();
     timeDateBadge.textContent = fmtDate(today);
 
-    tpTime.value = `${h}${m}`; // 預設 HHMM
+    tpTime.value = `${h}${m}`;
     tpTime.focus();
 
     timeMask.style.display = "flex";
     timeMask.setAttribute("aria-hidden", "false");
 
-    return new Promise(resolve => {
-      timePickerResolve = resolve;
-    });
+    return new Promise(resolve => { timePickerResolve = resolve; });
   }
 
   function closeTimePicker(){
@@ -726,27 +879,20 @@
 
   tpNow.onclick = () => {
     const d = new Date();
-    const h = String(d.getHours()).padStart(2, "0");
-    const m = String(d.getMinutes()).padStart(2, "0");
-    tpTime.value = `${h}${m}`;
+    tpTime.value = `${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
   };
 
   tpOK.onclick = () => {
     let raw = (tpTime.value || "").trim();
-    if(!raw){
-      alert("請輸入時間，例如 0730 或 7:30");
-      tpTime.focus();
-      return;
-    }
+    if(!raw){ alert("請輸入時間，例如 0730 或 7:30"); tpTime.focus(); return; }
 
     let h, m;
 
     if (/^\d{1,2}:\d{2}$/.test(raw)) {
       const [hh, mm] = raw.split(":");
-      h = Number(hh);
-      m = Number(mm);
+      h = Number(hh); m = Number(mm);
     } else if (/^\d{3,4}$/.test(raw)) {
-      const s = raw.padStart(4, "0"); // 730 -> 0730
+      const s = raw.padStart(4, "0");
       h = Number(s.slice(0, 2));
       m = Number(s.slice(2, 4));
     } else {
@@ -764,17 +910,14 @@
     tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 
     const d = new Date();
-    d.setHours(h, m, 0, 0); // 秒固定 00
+    d.setHours(h, m, 0, 0);
     const ts = d.getTime();
 
     if(timePickerResolve) timePickerResolve(ts);
     closeTimePicker();
   };
 
-  tpTime.addEventListener("keydown", (e) => {
-    if(e.key === "Enter") tpOK.click();
-  });
-
+  tpTime.addEventListener("keydown", (e) => { if(e.key === "Enter") tpOK.click(); });
   window.addEventListener("keydown", (e) => {
     if(e.key === "Escape" && timeMask.style.display === "flex"){
       if(timePickerResolve) timePickerResolve(null);
@@ -791,31 +934,24 @@
   const backupCancel = $("#backupCancel");
   const backupImportLocal = $("#backupImportLocal");
   const backupImportSync = $("#backupImportSync");
-
-  let pendingBackup = null; // {meta, state}
+  let pendingBackup = null;
 
   function openBackupModal(summary){
     backupKv.innerHTML = summary.kv.map(([k,v]) => `
       <div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div>
     `).join("");
-
     backupWarn.textContent = summary.warnText || "";
     backupImportSync.style.display = roomId ? "inline-flex" : "none";
-
     backupMask.style.display = "flex";
     backupMask.setAttribute("aria-hidden", "false");
   }
-
   function closeBackupModal(){
     backupMask.style.display = "none";
     backupMask.setAttribute("aria-hidden", "true");
     pendingBackup = null;
   }
-
   backupCancel.onclick = () => closeBackupModal();
-  backupMask.addEventListener("click", (e) => {
-    if(e.target === backupMask) closeBackupModal();
-  });
+  backupMask.addEventListener("click", (e) => { if(e.target === backupMask) closeBackupModal(); });
 
   function countBackupInfo(s){
     const chN = s?.channels?.length || 0;
@@ -838,7 +974,6 @@
       version: data?.version ?? st?.version ?? "",
       fileName: data?.fileName || ""
     };
-
     const info = countBackupInfo(st);
     const exp = meta.exportedAt ? new Date(meta.exportedAt) : null;
 
@@ -872,12 +1007,9 @@
       roomId: roomId || null,
       state
     };
-
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-
     const ts = new Date();
     const name = `aion2-boss-backup-${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,"0")}${String(ts.getDate()).padStart(2,"0")}-${String(ts.getHours()).padStart(2,"0")}${String(ts.getMinutes()).padStart(2,"0")}.json`;
-
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -890,24 +1022,17 @@
   fileImport.onchange = async (e) => {
     const file = e.target.files?.[0];
     if(!file) return;
-
     try{
       const text = await file.text();
       const data = JSON.parse(text);
-
       if(!data || !data.state || !Array.isArray(data.state.channels)){
         alert("備份檔格式不正確（缺少 state/channels）");
         return;
       }
-
       data.fileName = file.name;
       data.state = normalizeState(data.state);
-
       pendingBackup = data;
-
-      const summary = buildBackupSummary(pendingBackup);
-      openBackupModal(summary);
-
+      openBackupModal(buildBackupSummary(pendingBackup));
     }catch(err){
       console.error(err);
       alert("匯入失敗：請確認檔案是否為有效 JSON");
@@ -918,14 +1043,10 @@
 
   async function applyImport({syncToRoom}){
     if(!pendingBackup?.state) return;
-
     state = normalizeState(pendingBackup.state);
     saveLocal(state);
     render();
-
-    if(syncToRoom && roomId){
-      await pushToCloud();
-    }
+    if(syncToRoom && roomId) await pushToCloud();
     closeBackupModal();
     alert(syncToRoom && roomId ? "匯入完成（已同步到房間）" : "匯入完成（只影響本機）");
   }
@@ -936,10 +1057,7 @@
   };
 
   backupImportSync.onclick = async () => {
-    if(!roomId){
-      alert("你尚未加入房間，無法同步到房間。");
-      return;
-    }
+    if(!roomId){ alert("你尚未加入房間，無法同步到房間。"); return; }
     if(!confirm("⚠️ 確定要匯入備份並同步到房間？這會覆蓋房間所有人的資料。")) return;
     await applyImport({syncToRoom:true});
   };
@@ -1079,7 +1197,6 @@
         delete b._spawnedAt;
         saveLocal(state); render(); await pushToCloud();
       }),
-
       mkBtn("手動設定", "btn", async () => {
         const ts = await openTimePicker(b.lastKillAt);
         if(!ts) return;
@@ -1088,25 +1205,22 @@
         delete b._spawnedAt;
         saveLocal(state); render(); await pushToCloud();
       }),
-
       mkBtn("編輯", "btn primary", async () => {
         const newName = prompt("BOSS 名稱（繁中）：", b.name);
         if(newName === null) return;
-
         const newLoc = prompt("出現地區（位置）：", b.location || "");
         if(newLoc === null) return;
-
         const baseMin = prompt("平常重生（分鐘，0=需手動）：", String(b.baseMin ?? 0));
         if(baseMin === null) return;
-
         const eventMin = prompt("活動重生（分鐘，0=需手動）：", String(b.eventMin ?? 0));
         if(eventMin === null) return;
-
         const newNote = prompt("備註（可留空）：", b.note || "");
         if(newNote === null) return;
 
         const bM = Number(baseMin), eM = Number(eventMin);
-        if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){ alert("分鐘數請輸入 0 或正整數"); return; }
+        if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){
+          alert("分鐘數請輸入 0 或正整數"); return;
+        }
 
         b.name = (newName.trim() || b.name);
         b.location = (newLoc.trim());
@@ -1117,7 +1231,6 @@
 
         saveLocal(state); render(); await pushToCloud();
       }),
-
       mkBtn("刪除", "btn danger", async () => {
         if(!confirm(`刪除「${b.name}」？`)) return;
         ch.bosses = ch.bosses.filter(x => x.id !== b.id);
@@ -1141,17 +1254,13 @@
   };
 
   chkSound.onchange = async () => { state.settings.soundEnabled = chkSound.checked; saveLocal(state); render(); await pushToCloud(); };
-
   chkEvent.onchange = async () => {
     state.settings.eventMode = chkEvent.checked;
     for(const ch of state.channels) for(const b of ch.bosses) b.notified = false;
     saveLocal(state); render(); await pushToCloud();
   };
-
   rngVol.oninput = async () => { state.settings.volume = Math.max(0, Math.min(1, Number(rngVol.value)/100)); saveLocal(state); };
-
   btnMute.onclick = async () => { state.settings.muted = !state.settings.muted; saveLocal(state); render(); await pushToCloud(); };
-
   notifyMin.onchange = async () => {
     const v = Number(notifyMin.value);
     state.settings.notifyBeforeMin = Number.isFinite(v) ? Math.max(0, Math.min(180, Math.round(v))) : 3;
@@ -1167,21 +1276,19 @@
   $("#btnAddBoss").onclick = async () => {
     const name = prompt("BOSS 名稱（繁中）：", "新BOSS");
     if(name === null) return;
-
     const loc = prompt("出現地區（位置）：", "");
     if(loc === null) return;
-
     const baseMin = prompt("平常重生（分鐘，0=需手動）：", "60");
     if(baseMin === null) return;
-
     const eventMin = prompt("活動重生（分鐘，0=需手動）：", "30");
     if(eventMin === null) return;
-
     const note = prompt("備註（可留空）：", "");
     if(note === null) return;
 
     const bM = Number(baseMin), eM = Number(eventMin);
-    if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){ alert("分鐘數請輸入 0 或正整數"); return; }
+    if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){
+      alert("分鐘數請輸入 0 或正整數"); return;
+    }
 
     const ch = activeChannel();
     ch.bosses.push({
@@ -1208,7 +1315,7 @@
   };
 
   // =========================
-  // 提醒 + 已刷新 30 秒自動重置（同步到房間）
+  // 提醒 + 已刷新 30 秒自動重置（同步）
   // =========================
   function checkAlerts(){
     const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
@@ -1259,7 +1366,7 @@
   }
 
   // =========================
-  // 房間加入/連結
+  // 房間加入/連結（加入既有房間不覆蓋 + UI lock + 加入序/房主/線上）
   // =========================
   const roomInput = $("#roomId");
   const joinBtn = $("#btnJoin");
@@ -1273,16 +1380,41 @@
 
   joinBtn.onclick = async () => {
     const r = (roomInput.value || "").trim();
-    if(!r || r.length < 3){ alert("Room ID 至少 3 字元"); return; }
+    if(!r || r.length < 3){
+      alert("Room ID 至少 3 字元");
+      return;
+    }
+
+    // 切房：先停掉舊監聽/心跳
+    if(unsubRoom){ unsubRoom(); unsubRoom = null; }
+    stopPresence();
+
     roomId = r;
-    setCloudOk(null, "連線中…");
-    await ensureRoomExists();
-    startListen();
-    await pushToCloud();
-    const u = new URL(location.href);
-    u.searchParams.set("room", roomId);
-    history.replaceState(null, "", u.toString());
-    render();
+
+    setLocked(true, "同步中，操作已暫時鎖定…");
+    setCloudStatus("正在連線房間…", null);
+
+    try{
+      const existed = await ensureRoomAndJoinMeta();
+      setCloudStatus(existed ? "已加入房間，正在同步資料…" : "已建立新房間，初始化中…", null);
+
+      // ✅ 開始監聽（只拉雲端資料，不會覆蓋）
+      startRoomListen();
+
+      // ✅ presence
+      await startPresence();
+
+      // 更新網址
+      const u = new URL(location.href);
+      u.searchParams.set("room", roomId);
+      history.replaceState(null, "", u.toString());
+
+      render();
+    }catch(e){
+      console.error(e);
+      setCloudStatus("加入失敗（看 Console/Rules）", false);
+      setLocked(false);
+    }
   };
 
   copyBtn.onclick = async () => {
@@ -1295,7 +1427,11 @@
   };
 
   // init
-  setCloudOk(false, "未連線");
+  roleLabel.textContent = "—";
+  joinIndexLabel.textContent = "—";
+  onlineLabel.textContent = "0";
+  setCloudStatus("未連線", false);
+
   const urlRoom = getRoomFromURL();
   if(urlRoom) roomInput.value = urlRoom;
 
@@ -1309,4 +1445,3 @@
 </script>
 </body>
 </html>
-
