@@ -1,0 +1,1119 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AION 2｜BOSS 倒數計時器（多人共用）</title>
+
+  <style>
+    :root{
+      --bg:#0b0f17; --panel:#121a2a; --text:#e8eefc; --muted:#9fb0d0; --line:rgba(255,255,255,.10);
+      --accent:#7aa7ff; --danger:#ff6b6b; --good:#49d17d; --warn:#ffd166;
+      --shadow: 0 12px 30px rgba(0,0,0,.35); --radius: 16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans TC", Helvetica, Arial;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; background:
+        radial-gradient(1200px 600px at 10% 0%, rgba(122,167,255,.16), transparent 60%),
+        radial-gradient(900px 500px at 90% 10%, rgba(73,209,125,.12), transparent 55%),
+        var(--bg);
+      color:var(--text); font-family:var(--sans);
+    }
+    .wrap{max-width:1180px;margin:24px auto;padding:0 16px 40px}
+    .topbar{
+      display:flex; gap:12px; align-items:flex-start; justify-content:space-between;
+      padding:16px; background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
+      border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);
+      position:sticky; top:12px; z-index:10; backdrop-filter: blur(10px);
+    }
+    .title{display:flex; flex-direction:column; gap:6px; min-width:260px}
+    .title h1{margin:0; font-size:18px; letter-spacing:.2px}
+    .title .sub{color:var(--muted); font-size:12px; line-height:1.35}
+    .controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end}
+    .btn,.chip,select,input[type="number"],input[type="range"],input[type="text"]{
+      border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.06);
+      color:var(--text); padding:9px 12px; font-size:13px;
+    }
+    .btn{cursor:pointer; transition:transform .06s ease, border-color .2s}
+    .btn:hover{border-color:rgba(122,167,255,.55)} .btn:active{transform:translateY(1px)}
+    .btn.danger{border-color:rgba(255,107,107,.35)} .btn.danger:hover{border-color:rgba(255,107,107,.65)}
+    .btn.primary{border-color:rgba(122,167,255,.35)} .btn.primary:hover{border-color:rgba(122,167,255,.70)}
+    .btn.good{border-color:rgba(73,209,125,.35)} .btn.good:hover{border-color:rgba(73,209,125,.70)}
+    .grid{display:grid; grid-template-columns: 1.25fr .75fr; gap:14px; margin-top:14px;}
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr} .topbar{position:relative; top:0} }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
+      border:1px solid var(--line); border-radius:var(--radius);
+      box-shadow:var(--shadow); overflow:hidden;
+    }
+    .tabs{display:flex; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+    .tab{
+      padding:7px 10px; border-radius:999px; border:1px solid var(--line);
+      background:rgba(255,255,255,.06); cursor:pointer; font-size:13px;
+    }
+    .tab.active{border-color:rgba(122,167,255,.7); box-shadow:0 0 0 3px rgba(122,167,255,.12) inset}
+    .body{padding:14px 16px}
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between}
+    .kpi{display:flex; gap:10px; flex-wrap:wrap}
+    .kpi .chip{display:flex; align-items:center; gap:8px}
+    .hint{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.45}
+    input[type="range"]{accent-color: var(--accent)}
+    .list{display:flex; flex-direction:column; gap:10px; margin-top:14px}
+    .item{
+      padding:12px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.04);
+      display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center;
+    }
+    .meta{display:flex; flex-direction:column; gap:6px; min-width:0}
+    .nameRow{display:flex; gap:8px; align-items:center; min-width:0; flex-wrap:wrap}
+    .name{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px}
+    .star{cursor:pointer; font-size:16px; line-height:1; opacity:.9}
+    .star.off{opacity:.35}
+    .tiny{font-size:12px; color:var(--muted)}
+    .countdown{font-family:var(--mono); font-size:14px}
+    .badge{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line);
+      color:var(--muted);
+    }
+    .badge.good{color:var(--good); border-color:rgba(73,209,125,.25)}
+    .badge.warn{color:var(--warn); border-color:rgba(255,209,102,.25)}
+    .badge.danger{color:var(--danger); border-color:rgba(255,107,107,.25)}
+    .actions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+    .actions .btn{padding:8px 10px}
+    .favitem{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 12px; border:1px dashed var(--line); border-radius:14px;
+      margin-top:10px;
+    }
+    .favitem .left{display:flex; flex-direction:column; gap:4px; min-width:0}
+    .mono{font-family:var(--mono)}
+    .muted{color:var(--muted)}
+    .roombar{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+    .roombar input{width:180px}
+    .statusDot{display:inline-block;width:10px;height:10px;border-radius:999px;background:rgba(255,255,255,.25);border:1px solid var(--line);margin-right:6px}
+    .statusDot.ok{background:rgba(73,209,125,.8)}
+    .statusDot.bad{background:rgba(255,107,107,.8)}
+    select{appearance:auto}
+
+    /* ===== 字體大小（本機 UI 偏好） ===== */
+    :root{ --fontScale: 1; }
+    html{ font-size: calc(16px * var(--fontScale)); }
+    html[data-font="sm"]{ --fontScale: 0.92; }
+    html[data-font="md"]{ --fontScale: 1; }
+    html[data-font="lg"]{ --fontScale: 1.10; }
+
+    /* ===== 手動時間輸入 Modal ===== */
+    .modalMask{
+      position:fixed; inset:0; background:rgba(0,0,0,.55);
+      display:none; align-items:center; justify-content:center;
+      padding:16px; z-index:9999;
+    }
+    .modal{
+      width:min(520px, 96vw);
+      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .modalHead{
+      padding:12px 14px; border-bottom:1px solid var(--line);
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+    }
+    .modalHead b{font-size:14px}
+    .modalBody{padding:14px}
+    .modalRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .modalRow .chip{background:rgba(255,255,255,.04)}
+    .modalFoot{
+      padding:12px 14px; border-top:1px solid var(--line);
+      display:flex; justify-content:flex-end; gap:10px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="title">
+      <h1>AION 2｜BOSS 倒數計時器（多人共用）</h1>
+      <div class="sub">
+        同一個 Room ID 的人會同步看到同一份倒數資料（擊殺/編輯/新增會即時同步）。<br>
+        ※ 「字體/只看收藏/提示音選單」為本機偏好，不會同步到房間。
+      </div>
+
+      <div class="roombar" style="margin-top:8px">
+        <span class="chip"><span class="statusDot" id="dot"></span><span id="cloudStatus">未連線</span></span>
+        <input id="roomId" type="text" placeholder="Room ID（例如 aion2-01）" />
+        <button class="btn primary" id="btnJoin">加入/建立房間</button>
+        <button class="btn" id="btnCopyLink">複製房間連結</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn danger" id="btnResetLocal">重置本機資料</button>
+
+      <span class="chip" title="活動模式：多數重生時間減半（深淵有例外）">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
+          <input type="checkbox" id="chkEvent" />
+          活動模式
+        </label>
+      </span>
+
+      <span class="chip">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
+          <input type="checkbox" id="chkSound" />
+          啟用提醒音
+        </label>
+      </span>
+
+      <span class="chip" style="display:flex;gap:8px;align-items:center;">
+        字體
+        <select id="selFont" class="btn" style="padding:8px 10px">
+          <option value="sm">小</option>
+          <option value="md" selected>中</option>
+          <option value="lg">大</option>
+        </select>
+      </span>
+
+      <span class="chip" title="只顯示你已收藏（⭐）的 BOSS（本機偏好）">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
+          <input type="checkbox" id="chkOnlyFav" />
+          只看收藏
+        </label>
+      </span>
+
+      <span class="chip" style="display:flex;gap:8px;align-items:center;">
+        即將刷新音效
+        <select id="selSoundWarn" class="btn" style="padding:8px 10px">
+          <option value="soft">柔和（單聲）</option>
+          <option value="sharp" selected>清脆（單聲）</option>
+          <option value="double">雙聲（叮叮）</option>
+          <option value="alarm">警告（短促）</option>
+          <option value="file">音檔（alert.mp3）</option>
+        </select>
+      </span>
+
+      <span class="chip" style="display:flex;gap:8px;align-items:center;">
+        已刷新音效
+        <select id="selSoundSpawn" class="btn" style="padding:8px 10px">
+          <option value="soft">柔和（單聲）</option>
+          <option value="sharp">清脆（單聲）</option>
+          <option value="double" selected>雙聲（叮叮）</option>
+          <option value="alarm">警告（短促）</option>
+          <option value="file">音檔（alert.mp3）</option>
+        </select>
+      </span>
+
+      <span class="chip" style="display:flex;gap:10px;align-items:center;">
+        音量
+        <input type="range" id="rngVol" min="0" max="100" value="60" />
+        <button class="btn" id="btnMute">靜音</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="tabs" id="tabs"></div>
+      <div class="body">
+        <div class="row" style="align-items:flex-end;">
+          <div class="kpi">
+            <span class="chip">提醒提前 <input id="notifyMin" type="number" min="0" max="180" style="width:84px" /> 分鐘</span>
+            <span class="chip">活動：<b id="eventLabel">OFF</b></span>
+            <span class="chip">房間：<span class="mono" id="roomLabel">（未加入）</span></span>
+          </div>
+          <div class="kpi">
+            <button class="btn primary" id="btnAddBoss">＋新增 BOSS</button>
+            <button class="btn" id="btnAddChannel">＋新增分流</button>
+          </div>
+        </div>
+
+        <div class="hint">
+          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>改為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
+          已刷新後 <b>30 秒</b> 若沒人按「擊殺」，會自動重置該王倒數並同步到房間。已加上 <b>出現地區</b> 顯示，可在「編輯」中修改。
+        </div>
+
+        <div class="list" id="bossList"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="body">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <b>⭐ 收藏</b>
+          <span class="badge" id="favCount">0</span>
+        </div>
+        <div id="favBox"></div>
+
+        <div class="hint" style="margin-top:14px">
+          ※ 字體大小 / 只看收藏 / 提示音選單為本機偏好，不會同步到房間。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 手動時間輸入 Modal（只留一欄：時間） -->
+<div class="modalMask" id="timeMask" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
+    <div class="modalHead">
+      <b id="timeTitle">手動設定上次擊殺時間（今天）</b>
+      <span class="badge" id="timeDateBadge"></span>
+    </div>
+    <div class="modalBody">
+      <div class="hint" style="margin-top:0">
+        請輸入 <b>0730</b> 或 <b>7:30</b>，會自動轉成 <b>07:30</b>。日期固定今天，秒固定 00。
+      </div>
+
+      <div class="modalRow" style="margin-top:12px">
+        <span class="chip">時間（HHMM 或 HH:MM）
+          <input id="tp_time" type="text" inputmode="numeric"
+                 placeholder="例如 0730 或 7:30"
+                 style="width:160px">
+        </span>
+        <button class="btn" id="tp_now" title="快速填入目前時間">現在</button>
+      </div>
+    </div>
+    <div class="modalFoot">
+      <button class="btn" id="tp_cancel">取消</button>
+      <button class="btn primary" id="tp_ok">確定</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
+  import {
+    getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp
+  } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
+
+  // ✅ 你的 Firebase config（已填入）
+  const firebaseConfig = {
+    apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
+    authDomain: "aion-2-timer.firebaseapp.com",
+    projectId: "aion-2-timer",
+    storageBucket: "aion-2-timer.firebasestorage.app",
+    messagingSenderId: "385544715160",
+    appId: "1:385c0b9ba8c380226cb89ed".replace("385c0","385544715160:web:25c0b9ba8c380226cb89ed".split(":")[0]), /* no-op */
+    measurementId: "G-3Q914TBN8P"
+  };
+  // ↑ 上面為了避免貼上時被某些平台誤改字串做了 no-op，真正 appId 仍然正確
+  firebaseConfig.appId = "1:385544715160:web:25c0b9ba8c380226cb89ed";
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // =========================
+  // 資料（BOSS 名稱 + 地區）
+  // =========================
+  const now = () => Date.now();
+  const uid = (p) => `${p}-${Math.random().toString(16).slice(2,9)}${Date.now().toString(16).slice(-4)}`;
+
+  const preset = {
+    channels: [
+      { name:"天族", bosses:[
+        ["西側凱爾農",60,30,"坎塔斯溪谷",""],
+        ["東側涅凱爾",60,30,"坎塔斯溪谷",""],
+        ["腐朽的庫塔爾",60,30,"艾雷倫河沼澤",""],
+        ["盛開的柯林",120,60,"艾雷倫河中游",""],
+        ["護衛兵堤甘特",180,90,"要塞廢墟",""],
+        ["狂鬥士庫桑",240,120,"要塞廢墟",""],
+        ["祭司長加爾新",240,120,"要塞廢墟",""],
+        ["血獠牙普寧",360,180,"要塞廢墟",""],
+        ["憤怒的薩呂",360,180,"要塞廢墟",""],
+        ["學者拉烏拉",240,120,"托爾巴斯森林",""],
+        ["追擊者塔烏羅",240,120,"阿爾拉島部落",""],
+        ["森林戰士烏刺姆",480,240,"阿爾拉島部落",""],
+        ["黑色觸手拉瓦",480,240,"阿爾拉島部落",""],
+        ["叛教者雷西拉",360,180,"阿爾塔米亞峽谷",""],
+        ["百夫長戴米羅斯",480,240,"阿爾塔米亞高原",""],
+        ["神聖的安薩斯",720,360,"阿爾塔米亞高原",""],
+        ["收穫管理者莫夏夫",360,180,"德拉那栽培地",""],
+        ["監視兵器克納許",480,240,"納希德軍團要塞",""],
+        ["研究官塞特蘭",720,360,"納希德軍團要塞",""],
+        ["幻夢卡西亞",720,360,"幻影神庭院",""],
+        ["沉默塔爾坦",720,360,"阿爾塔米亞高原南部",""],
+        ["靈魂支配者卡沙帕",720,360,"阿爾塔米亞高原東部",""],
+        ["軍團長拉格塔",1440,720,"紅色森林",""],
+        ["永恆卡爾吐亞",1440,720,"永恆之島",""],
+      ]},
+      { name:"魔族", bosses:[
+        ["融化的達納爾",60,30,"德雷得奇安失事地",""],
+        ["黑色戰士阿埃德",60,30,"無名墓地",""],
+        ["忠實的拉吉特",60,30,"聖所監視哨所",""],
+        ["狂戰士瓦格",120,60,"聖所監視哨所",""],
+        ["血戰士蘭那爾",180,90,"聖所監視哨所",""],
+        ["掠食者加爾桑",240,120,"瑪斯蘭森林",""],
+        ["欺瞞者特里德",240,120,"烏瑪通海姆",""],
+        ["藍色水波凱爾皮那",240,120,"淨化之森",""],
+        ["參謀官勒沙納",360,180,"淨化之森",""],
+        ["沉默塔爾坦",720,360,"淨化之森",""],
+        ["總監督官努塔",240,120,"德拉那兒園斷",""],
+        ["別動隊長令克斯",360,180,"德拉那兒園斷",""],
+        ["褻瀆者諾布魯德",480,240,"巴斯斐爾特廢墟",""],
+        ["亡魂執政官亞克席歐斯",480,240,"巴斯斐爾特廢墟",""],
+        ["中毒的哈迪倫",360,180,"法夫奈特埋葬地",""],
+        ["靈魂支配者卡沙帕",720,360,"法夫奈特埋葬地",""],
+        ["處刑者巴爾西恩",480,240,"葛利巴德峽谷西部",""],
+        ["德拉坎部隊兵器古魯塔",720,360,"葛利巴德峽谷東部",""],
+        ["百戰老將舒札坎",360,180,"黑爪部落",""],
+        ["秘術卡魯卡",480,240,"黑爪部落",""],
+        ["黑闇比修貝達",720,360,"黑爪部落",""],
+        ["軍團長拉格塔",1440,720,"拉格塔要塞",""],
+        ["敏銳的敘拉克",720,360,"因派園西姆廣場",""],
+        ["不滅卡爾吐亞",1440,720,"不滅之島",""],
+      ]},
+      { name:"深淵", bosses:[
+        ["監視者卡伊拉",60,60,"艾雷修藍塔下層","活動模式時間不變（出現機率↑）"],
+        ["精靈王阿格羅",1440,720,"希埃爾之翼群島 / 希埃爾右翼",""],
+        ["守護神將納赫瑪",0,0,"艾雷修藍塔之根","週末規則：需手動擊殺後計時（此版先提示）"],
+      ]},
+    ]
+  };
+
+  const defaultState = () => ({
+    version: 5,
+    settings: { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false },
+    activeChannelId: "ch-0",
+    channels: preset.channels.map((ch, idx) => ({
+      id: `ch-${idx}`,
+      name: ch.name,
+      bosses: ch.bosses.map((b, i) => ({
+        id: uid("b"),
+        name: b[0],
+        baseMin: b[1],
+        eventMin: b[2],
+        location: b[3] || "",
+        note: b[4] || "",
+        lastKillAt: now() - (i%5)*12*60*1000,
+        starred: false,
+        notified: false
+      }))
+    }))
+  });
+
+  // =========================
+  // 本機暫存
+  // =========================
+  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v5";
+  const loadLocal = () => { try { const raw = localStorage.getItem(LOCAL_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const saveLocal = (s) => localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
+
+  // 本機 UI 偏好（不同步）
+  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v4";
+  const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
+  let uiPref = loadUI() || { font: "md", onlyFav: false, soundWarn: "sharp", soundSpawn: "double" };
+  if (!uiPref.soundWarn) uiPref.soundWarn = "sharp";
+  if (!uiPref.soundSpawn) uiPref.soundSpawn = "double";
+
+  let state = loadLocal() || defaultState();
+
+  // 向下相容：補欄位
+  (function migrateIfNeeded(){
+    let changed = false;
+    if(state?.channels){
+      for(const ch of state.channels){
+        for(const b of (ch.bosses||[])){
+          if(b.location === undefined){ b.location = ""; changed = true; }
+          if(b.note === undefined){ b.note = ""; changed = true; }
+          if(b.notified === undefined){ b.notified = false; changed = true; }
+        }
+      }
+    }
+    if(changed) saveLocal(state);
+  })();
+
+  // =========================
+  // Firestore 房間同步
+  // =========================
+  let roomId = "";
+  let unsub = null;
+  let applyingRemote = false;
+
+  const roomDocRef = () => doc(db, "rooms", roomId);
+
+  async function ensureRoomExists(){
+    const ref = roomDocRef();
+    const snap = await getDoc(ref);
+    if(!snap.exists()){
+      await setDoc(ref, { state, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  }
+
+  function startListen(){
+    if(unsub) unsub();
+    const ref = roomDocRef();
+    unsub = onSnapshot(ref, (snap) => {
+      if(!snap.exists()) return;
+      const data = snap.data();
+      if(!data?.state) return;
+
+      applyingRemote = true;
+      state = data.state;
+
+      if(state?.channels){
+        for(const ch of state.channels){
+          for(const b of (ch.bosses||[])){
+            if(b.location === undefined) b.location = "";
+            if(b.note === undefined) b.note = "";
+            if(b.notified === undefined) b.notified = false;
+          }
+        }
+      }
+
+      saveLocal(state);
+      render();
+      applyingRemote = false;
+      setCloudOk(true);
+    }, (err) => {
+      console.error(err);
+      setCloudOk(false, "連線失敗（看 Console/Rules）");
+    });
+  }
+
+  async function pushToCloud(){
+    if(!roomId) return;
+    if(applyingRemote) return;
+    try{
+      await setDoc(roomDocRef(), { state, updatedAt: serverTimestamp() }, { merge: true });
+      setCloudOk(true);
+    }catch(e){
+      console.error(e);
+      setCloudOk(false, "寫入失敗（看 Rules）");
+    }
+  }
+
+  // =========================
+  // UI/倒數
+  // =========================
+  const $ = (q) => document.querySelector(q);
+  const tabsEl = $("#tabs");
+  const listEl = $("#bossList");
+  const favBox = $("#favBox");
+  const favCount = $("#favCount");
+
+  const chkSound = $("#chkSound");
+  const chkEvent = $("#chkEvent");
+  const rngVol = $("#rngVol");
+  const btnMute = $("#btnMute");
+  const notifyMin = $("#notifyMin");
+  const eventLabel = $("#eventLabel");
+  const roomLabel = $("#roomLabel");
+
+  const selFont = $("#selFont");
+  const chkOnlyFav = $("#chkOnlyFav");
+  const selSoundWarn = $("#selSoundWarn");
+  const selSoundSpawn = $("#selSoundSpawn");
+
+  const dot = $("#dot");
+  const cloudStatus = $("#cloudStatus");
+
+  function setCloudOk(ok, msg){
+    dot.classList.toggle("ok", !!ok);
+    dot.classList.toggle("bad", ok===false);
+    cloudStatus.textContent = msg || (ok ? "已連線" : "未連線");
+  }
+
+  // ===== 提示音（選單 + 不同狀態）=====
+  let audioCtx = null;
+  function ensureAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+
+  let alertAudio = null;
+  function playFileAlert(){
+    try{
+      if(!alertAudio){
+        alertAudio = new Audio("alert.mp3");
+        alertAudio.preload = "auto";
+      }
+      alertAudio.volume = Math.max(0, Math.min(1, state.settings.volume ?? 0.6));
+      alertAudio.currentTime = 0;
+      alertAudio.play().catch(()=>{});
+    }catch(e){
+      console.warn("音檔提示音播放失敗：", e);
+    }
+  }
+
+  function playTone({ type="triangle", freq=880, dur=0.26 }){
+    ensureAudio();
+    const t = audioCtx.currentTime;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+
+    const vol = Math.max(0, Math.min(1, state.settings.volume ?? 0.6));
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.35 * vol, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  function playDouble(){
+    ensureAudio();
+    const base = audioCtx.currentTime;
+    const vol = Math.max(0, Math.min(1, state.settings.volume ?? 0.6));
+
+    const one = (start) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(880, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.35 * vol, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.20);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.22);
+    };
+
+    one(base);
+    one(base + 0.28);
+  }
+
+  function beep(kind = "warn"){
+    if(!state.settings.soundEnabled || state.settings.muted) return;
+
+    const mode = (kind === "spawn")
+      ? (uiPref.soundSpawn || "double")
+      : (uiPref.soundWarn || "sharp");
+
+    if(mode === "file"){ playFileAlert(); return; }
+    if(mode === "double"){ playDouble(); return; }
+    if(mode === "soft"){ playTone({ type:"sine", freq:660, dur:0.30 }); return; }
+    if(mode === "alarm"){ playTone({ type:"square", freq:900, dur:0.18 }); return; }
+
+    playTone({ type:"triangle", freq:1200, dur:0.22 }); // sharp
+  }
+
+  const pad2 = n => String(n).padStart(2,"0");
+  const fmtDuration = (ms) => {
+    ms = Math.max(0, ms);
+    const s = Math.floor(ms/1000);
+    const hh = Math.floor(s/3600);
+    const mm = Math.floor((s%3600)/60);
+    const ss = s%60;
+    return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+  };
+  const fmtTime = (ts) => {
+    const d = new Date(ts);
+    return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  };
+  const fmtDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+  const activeChannel = () => state.channels.find(c => c.id === state.activeChannelId) || state.channels[0];
+  const respawnMin = (b) => {
+    const em = state.settings.eventMode;
+    const m = em ? (b.eventMin ?? b.baseMin) : (b.baseMin ?? b.eventMin);
+    return Math.max(0, Number(m)||0);
+  };
+  const nextSpawn = (b) => (b.lastKillAt ?? 0) + respawnMin(b) * 60 * 1000;
+  const sortBosses = (arr) => [...arr].sort((a,b)=> nextSpawn(a)-nextSpawn(b));
+  const computeStatus = (remainMs, notifyBeforeMin) => {
+    const notifyMs = (notifyBeforeMin ?? 0) * 60 * 1000;
+    if(remainMs <= 0) return {text:"已刷新", cls:"danger"};
+    if(remainMs <= notifyMs) return {text:`即將刷新（≤${notifyBeforeMin} 分）`, cls:"warn"};
+    return {text:"計時中", cls:"good"};
+  };
+  const mkBtn = (text, cls, onClick) => {
+    const b = document.createElement("button");
+    b.className = cls;
+    b.textContent = text;
+    b.onclick = onClick;
+    return b;
+  };
+  const allStarred = () => {
+    const out = [];
+    for(const ch of state.channels) for(const b of ch.bosses) if(b.starred) out.push({ch,b});
+    return out.sort((x,y)=> nextSpawn(x.b)-nextSpawn(y.b));
+  };
+
+  // =========================
+  // 手動時間輸入（今天）：單欄「時間」
+  // =========================
+  const timeMask = $("#timeMask");
+  const tpTime = $("#tp_time");
+  const tpOK = $("#tp_ok");
+  const tpCancel = $("#tp_cancel");
+  const tpNow = $("#tp_now");
+  const timeDateBadge = $("#timeDateBadge");
+
+  let timePickerResolve = null;
+
+  function openTimePicker(defaultTs){
+    const base = defaultTs ? new Date(defaultTs) : new Date();
+    const h = String(base.getHours()).padStart(2, "0");
+    const m = String(base.getMinutes()).padStart(2, "0");
+
+    const today = new Date();
+    timeDateBadge.textContent = fmtDate(today);
+
+    tpTime.value = `${h}${m}`; // 預設 HHMM
+    tpTime.focus();
+
+    timeMask.style.display = "flex";
+    timeMask.setAttribute("aria-hidden", "false");
+
+    return new Promise(resolve => {
+      timePickerResolve = resolve;
+    });
+  }
+
+  function closeTimePicker(){
+    timeMask.style.display = "none";
+    timeMask.setAttribute("aria-hidden", "true");
+    timePickerResolve = null;
+  }
+
+  tpCancel.onclick = () => {
+    if(timePickerResolve) timePickerResolve(null);
+    closeTimePicker();
+  };
+
+  timeMask.addEventListener("click", (e) => {
+    if(e.target === timeMask){
+      if(timePickerResolve) timePickerResolve(null);
+      closeTimePicker();
+    }
+  });
+
+  tpNow.onclick = () => {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    tpTime.value = `${h}${m}`;
+  };
+
+  tpOK.onclick = () => {
+    let raw = (tpTime.value || "").trim();
+
+    if(!raw){
+      alert("請輸入時間，例如 0730 或 7:30");
+      tpTime.focus();
+      return;
+    }
+
+    let h, m;
+
+    if (/^\d{1,2}:\d{2}$/.test(raw)) {
+      const [hh, mm] = raw.split(":");
+      h = Number(hh);
+      m = Number(mm);
+    } else if (/^\d{3,4}$/.test(raw)) {
+      const s = raw.padStart(4, "0"); // 730 -> 0730
+      h = Number(s.slice(0, 2));
+      m = Number(s.slice(2, 4));
+    } else {
+      alert("時間格式錯誤，請用 0730 或 7:30");
+      tpTime.focus();
+      return;
+    }
+
+    if(h < 0 || h > 23 || m < 0 || m > 59){
+      alert("時間超出範圍（00:00 ～ 23:59）");
+      tpTime.focus();
+      return;
+    }
+
+    // 回填為 HH:MM
+    tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+
+    const d = new Date();
+    d.setHours(h, m, 0, 0); // 秒固定 00
+    const ts = d.getTime();
+
+    if(timePickerResolve) timePickerResolve(ts);
+    closeTimePicker();
+  };
+
+  // Enter 也可送出
+  tpTime.addEventListener("keydown", (e) => {
+    if(e.key === "Enter") tpOK.click();
+  });
+
+  // Esc 關閉
+  window.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && timeMask.style.display === "flex"){
+      if(timePickerResolve) timePickerResolve(null);
+      closeTimePicker();
+    }
+  });
+
+  // =========================
+  // Render
+  // =========================
+  function render(){
+    document.documentElement.dataset.font = uiPref.font || "md";
+    selFont.value = uiPref.font || "md";
+    chkOnlyFav.checked = !!uiPref.onlyFav;
+    selSoundWarn.value = uiPref.soundWarn || "sharp";
+    selSoundSpawn.value = uiPref.soundSpawn || "double";
+
+    chkSound.checked = !!state.settings.soundEnabled;
+    chkEvent.checked = !!state.settings.eventMode;
+    eventLabel.textContent = state.settings.eventMode ? "ON" : "OFF";
+    eventLabel.style.color = state.settings.eventMode ? "var(--warn)" : "var(--muted)";
+    rngVol.value = Math.round((state.settings.volume ?? 0.6)*100);
+    btnMute.textContent = state.settings.muted ? "取消靜音" : "靜音";
+    notifyMin.value = state.settings.notifyBeforeMin ?? 3;
+    roomLabel.textContent = roomId ? roomId : "（未加入）";
+
+    tabsEl.innerHTML = "";
+    state.channels.forEach(ch => {
+      const t = document.createElement("button");
+      t.className = "tab" + (ch.id===state.activeChannelId ? " active" : "");
+      t.textContent = ch.name;
+      t.onclick = async () => { state.activeChannelId = ch.id; saveLocal(state); render(); await pushToCloud(); };
+      tabsEl.appendChild(t);
+    });
+
+    const ch = activeChannel();
+    const rawBosses = ch.bosses || [];
+    const bosses = sortBosses(uiPref.onlyFav ? rawBosses.filter(b => b.starred) : rawBosses);
+
+    listEl.innerHTML = "";
+    if(bosses.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "tiny muted";
+      empty.textContent = uiPref.onlyFav
+        ? "你已開啟「只看收藏」，但此分流沒有收藏的 BOSS。"
+        : "這個分流還沒有 BOSS，點「＋新增 BOSS」開始。";
+      listEl.appendChild(empty);
+    }else{
+      bosses.forEach(b => listEl.appendChild(renderBossItem(ch, b)));
+    }
+
+    const starred = allStarred();
+    favCount.textContent = starred.length;
+    favBox.innerHTML = "";
+    if(starred.length === 0){
+      const e = document.createElement("div");
+      e.className = "tiny muted"; e.style.marginTop = "10px";
+      e.textContent = "還沒有收藏。點 BOSS 名稱旁邊的 ☆ 來收藏。";
+      favBox.appendChild(e);
+    }else{
+      for(const {ch, b} of starred){
+        const row = document.createElement("div");
+        row.className = "favitem";
+        const left = document.createElement("div");
+        left.className = "left";
+        left.innerHTML = `
+          <div style="display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap">
+            <span class="badge">${escapeHtml(ch.name)}</span>
+            ${b.location ? `<span class="badge">${escapeHtml(b.location)}</span>` : ""}
+            <b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(b.name)}</b>
+          </div>
+          <div class="tiny mono">${fmtDuration(nextSpawn(b)-now())} <span class="muted">｜</span> ${fmtTime(nextSpawn(b))}</div>
+        `;
+        const right = document.createElement("div");
+        right.className = "actions";
+        right.append(
+          mkBtn("前往", "btn", async () => { state.activeChannelId = ch.id; saveLocal(state); render(); await pushToCloud(); window.scrollTo({top:0,behavior:"smooth"}); }),
+          mkBtn("取消⭐", "btn", async () => { b.starred=false; saveLocal(state); render(); await pushToCloud(); })
+        );
+        row.append(left, right);
+        favBox.appendChild(row);
+      }
+    }
+  }
+
+  function renderBossItem(ch, b){
+    const item = document.createElement("div");
+    item.className = "item";
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const nameRow = document.createElement("div");
+    nameRow.className = "nameRow";
+
+    const star = document.createElement("span");
+    star.className = "star " + (b.starred ? "on" : "off");
+    star.textContent = b.starred ? "⭐" : "☆";
+    star.title = b.starred ? "取消收藏" : "收藏";
+    star.onclick = async () => { b.starred = !b.starred; saveLocal(state); render(); await pushToCloud(); };
+
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = b.name;
+
+    const locBadge = document.createElement("span");
+    locBadge.className = "badge";
+    locBadge.textContent = b.location ? b.location : "（未填地區）";
+
+    const m = respawnMin(b);
+    const timeBadge = document.createElement("span");
+    timeBadge.className = "badge";
+    timeBadge.textContent = m>0 ? `${m} 分` : `需手動`;
+
+    nameRow.append(star, name, locBadge, timeBadge);
+
+    const cd = document.createElement("div");
+    cd.className = "countdown";
+    const tNext = nextSpawn(b);
+    const remain = tNext - now();
+    cd.textContent = `${fmtDuration(remain)}  ｜  ${fmtTime(tNext)}`;
+
+    const sub = document.createElement("div");
+    sub.className = "tiny";
+    sub.textContent = `上次擊殺：${b.lastKillAt ? fmtTime(b.lastKillAt) : "未設定"}`;
+
+    const status = document.createElement("div");
+    status.className = "tiny";
+    const st = computeStatus(remain, state.settings.notifyBeforeMin);
+    const note = (b.note || "").trim();
+    status.innerHTML = `狀態：<span class="badge ${st.cls}">${st.text}</span>` + (note ? ` <span class="muted">｜</span> <span class="muted">${escapeHtml(note)}</span>` : "");
+    meta.append(nameRow, cd, sub, status);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    actions.append(
+      mkBtn("擊殺", "btn good", async () => {
+        b.lastKillAt = now();
+        b.notified = false;
+        delete b._spawnedAt;
+        saveLocal(state); render(); await pushToCloud();
+      }),
+
+      mkBtn("手動設定", "btn", async () => {
+        const ts = await openTimePicker(b.lastKillAt);
+        if(!ts) return;
+        b.lastKillAt = ts;
+        b.notified = false;
+        delete b._spawnedAt;
+        saveLocal(state); render(); await pushToCloud();
+      }),
+
+      mkBtn("編輯", "btn primary", async () => {
+        const newName = prompt("BOSS 名稱（繁中）：", b.name);
+        if(newName === null) return;
+
+        const newLoc = prompt("出現地區（位置）：", b.location || "");
+        if(newLoc === null) return;
+
+        const baseMin = prompt("平常重生（分鐘，0=需手動）：", String(b.baseMin ?? 0));
+        if(baseMin === null) return;
+
+        const eventMin = prompt("活動重生（分鐘，0=需手動）：", String(b.eventMin ?? 0));
+        if(eventMin === null) return;
+
+        const newNote = prompt("備註（可留空）：", b.note || "");
+        if(newNote === null) return;
+
+        const bM = Number(baseMin), eM = Number(eventMin);
+        if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){ alert("分鐘數請輸入 0 或正整數"); return; }
+
+        b.name = (newName.trim() || b.name);
+        b.location = (newLoc.trim());
+        b.baseMin = Math.round(bM);
+        b.eventMin = Math.round(eM);
+        b.note = newNote.trim();
+        b.notified = false;
+
+        saveLocal(state); render(); await pushToCloud();
+      }),
+
+      mkBtn("刪除", "btn danger", async () => {
+        if(!confirm(`刪除「${b.name}」？`)) return;
+        ch.bosses = ch.bosses.filter(x => x.id !== b.id);
+        saveLocal(state); render(); await pushToCloud();
+      })
+    );
+
+    item.append(meta, actions);
+    return item;
+  }
+
+  // =========================
+  // 控制項
+  // =========================
+  $("#btnResetLocal").onclick = () => {
+    if(!confirm("重置本機資料？（不會刪雲端房間）")) return;
+    localStorage.removeItem(LOCAL_KEY);
+    state = defaultState();
+    saveLocal(state);
+    render();
+  };
+
+  chkSound.onchange = async () => { state.settings.soundEnabled = chkSound.checked; saveLocal(state); render(); await pushToCloud(); };
+
+  chkEvent.onchange = async () => {
+    state.settings.eventMode = chkEvent.checked;
+    for(const ch of state.channels) for(const b of ch.bosses) b.notified = false;
+    saveLocal(state); render(); await pushToCloud();
+  };
+
+  rngVol.oninput = async () => { state.settings.volume = Math.max(0, Math.min(1, Number(rngVol.value)/100)); saveLocal(state); };
+
+  btnMute.onclick = async () => { state.settings.muted = !state.settings.muted; saveLocal(state); render(); await pushToCloud(); };
+
+  notifyMin.onchange = async () => {
+    const v = Number(notifyMin.value);
+    state.settings.notifyBeforeMin = Number.isFinite(v) ? Math.max(0, Math.min(180, Math.round(v))) : 3;
+    for(const ch of state.channels) for(const b of ch.bosses) b.notified = false;
+    saveLocal(state); render(); await pushToCloud();
+  };
+
+  selFont.onchange = () => { uiPref.font = selFont.value; saveUI(uiPref); render(); };
+  chkOnlyFav.onchange = () => { uiPref.onlyFav = chkOnlyFav.checked; saveUI(uiPref); render(); };
+  selSoundWarn.onchange = () => { uiPref.soundWarn = selSoundWarn.value; saveUI(uiPref); render(); };
+  selSoundSpawn.onchange = () => { uiPref.soundSpawn = selSoundSpawn.value; saveUI(uiPref); render(); };
+
+  $("#btnAddBoss").onclick = async () => {
+    const name = prompt("BOSS 名稱（繁中）：", "新BOSS");
+    if(name === null) return;
+
+    const loc = prompt("出現地區（位置）：", "");
+    if(loc === null) return;
+
+    const baseMin = prompt("平常重生（分鐘，0=需手動）：", "60");
+    if(baseMin === null) return;
+
+    const eventMin = prompt("活動重生（分鐘，0=需手動）：", "30");
+    if(eventMin === null) return;
+
+    const note = prompt("備註（可留空）：", "");
+    if(note === null) return;
+
+    const bM = Number(baseMin), eM = Number(eventMin);
+    if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){ alert("分鐘數請輸入 0 或正整數"); return; }
+
+    const ch = activeChannel();
+    ch.bosses.push({
+      id: uid("b"),
+      name: name.trim()||"新BOSS",
+      baseMin: Math.round(bM),
+      eventMin: Math.round(eM),
+      location: loc.trim(),
+      note: note.trim(),
+      lastKillAt: now(),
+      starred:false,
+      notified:false
+    });
+    saveLocal(state); render(); await pushToCloud();
+  };
+
+  $("#btnAddChannel").onclick = async () => {
+    const name = prompt("分流名稱：", `自訂分流 ${state.channels.length+1}`);
+    if(name === null) return;
+    const ch = { id: uid("ch"), name: (name.trim() || `自訂分流 ${state.channels.length+1}`), bosses: [] };
+    state.channels.push(ch);
+    state.activeChannelId = ch.id;
+    saveLocal(state); render(); await pushToCloud();
+  };
+
+  // =========================
+  // 提醒 + 已刷新 30 秒自動重置（同步到房間）
+  // =========================
+  function checkAlerts(){
+    const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
+    const notifyMs = notifyBeforeMin * 60 * 1000;
+    const AUTO_RESET_MS = 30 * 1000;
+
+    let changed = false;
+
+    for(const ch of state.channels){
+      for(const b of ch.bosses){
+        const m = respawnMin(b);
+        if(m <= 0) continue;
+
+        const tNext = nextSpawn(b);
+        const remain = tNext - now();
+
+        if(remain > 0 && remain <= notifyMs && !b.notified){
+          b.notified = true;
+          beep("warn");
+          changed = true;
+        }
+
+        if(remain <= 0){
+          if(!b._spawnedAt){
+            b._spawnedAt = now();
+            beep("spawn");
+            changed = true;
+          }else if(now() - b._spawnedAt >= AUTO_RESET_MS){
+            b.lastKillAt = now();
+            b.notified = false;
+            delete b._spawnedAt;
+            changed = true;
+          }
+        }else{
+          if(b._spawnedAt){
+            delete b._spawnedAt;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if(changed){
+      saveLocal(state);
+      pushToCloud();
+      render();
+    }
+  }
+
+  // =========================
+  // 房間加入/連結
+  // =========================
+  const roomInput = $("#roomId");
+  const joinBtn = $("#btnJoin");
+  const copyBtn = $("#btnCopyLink");
+
+  function getRoomFromURL(){
+    const u = new URL(location.href);
+    const r = u.searchParams.get("room");
+    return r ? r.trim() : "";
+  }
+
+  joinBtn.onclick = async () => {
+    const r = (roomInput.value || "").trim();
+    if(!r || r.length < 3){ alert("Room ID 至少 3 字元"); return; }
+    roomId = r;
+    setCloudOk(null, "連線中…");
+    await ensureRoomExists();
+    startListen();
+    await pushToCloud();
+    const u = new URL(location.href);
+    u.searchParams.set("room", roomId);
+    history.replaceState(null, "", u.toString());
+    render();
+  };
+
+  copyBtn.onclick = async () => {
+    const r = roomId || (roomInput.value || "").trim();
+    if(!r){ alert("先輸入 Room ID"); return; }
+    const u = new URL(location.href);
+    u.searchParams.set("room", r);
+    await navigator.clipboard.writeText(u.toString());
+    alert("已複製房間連結！");
+  };
+
+  // init
+  setCloudOk(false, "未連線");
+  const urlRoom = getRoomFromURL();
+  if(urlRoom) roomInput.value = urlRoom;
+
+  render();
+  setInterval(() => { checkAlerts(); render(); }, 1000);
+
+  // 解鎖音效（瀏覽器規定）
+  window.addEventListener("pointerdown", () => {
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  }, { once: false });
+</script>
+</body>
+</html>
