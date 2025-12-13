@@ -104,14 +104,14 @@
     html[data-font="md"]{ --fontScale: 1; }
     html[data-font="lg"]{ --fontScale: 1.10; }
 
-    /* ===== 手動時間輸入 Modal ===== */
+    /* ===== Modal 共用 ===== */
     .modalMask{
       position:fixed; inset:0; background:rgba(0,0,0,.55);
       display:none; align-items:center; justify-content:center;
       padding:16px; z-index:9999;
     }
     .modal{
-      width:min(520px, 96vw);
+      width:min(560px, 96vw);
       background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
       border:1px solid var(--line);
       border-radius:18px;
@@ -128,8 +128,13 @@
     .modalRow .chip{background:rgba(255,255,255,.04)}
     .modalFoot{
       padding:12px 14px; border-top:1px solid var(--line);
-      display:flex; justify-content:flex-end; gap:10px;
+      display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;
     }
+
+    .kv{display:grid; grid-template-columns: 120px 1fr; gap:8px 12px; margin-top:10px}
+    .kv .k{color:var(--muted); font-size:12px}
+    .kv .v{font-size:12px}
+    .hr{height:1px;background:var(--line); margin:12px 0}
   </style>
 </head>
 
@@ -152,6 +157,10 @@
     </div>
 
     <div class="controls">
+      <button class="btn" id="btnExport">匯出備份</button>
+      <button class="btn" id="btnImport">匯入備份</button>
+      <input type="file" id="fileImport" accept="application/json" style="display:none" />
+
       <button class="btn danger" id="btnResetLocal">重置本機資料</button>
 
       <span class="chip" title="活動模式：多數重生時間減半（深淵有例外）">
@@ -231,8 +240,8 @@
         </div>
 
         <div class="hint">
-          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>改為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
-          已刷新後 <b>30 秒</b> 若沒人按「擊殺」，會自動重置該王倒數並同步到房間。已加上 <b>出現地區</b> 顯示，可在「編輯」中修改。
+          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
+          已刷新後 <b>30 秒</b> 若沒人按「擊殺」，會自動重置該王倒數並同步到房間。
         </div>
 
         <div class="list" id="bossList"></div>
@@ -283,24 +292,48 @@
   </div>
 </div>
 
+<!-- 匯入備份摘要 Modal -->
+<div class="modalMask" id="backupMask" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
+    <div class="modalHead">
+      <b id="backupTitle">匯入備份｜摘要</b>
+      <span class="badge" id="backupBadge">JSON</span>
+    </div>
+    <div class="modalBody">
+      <div class="hint" style="margin-top:0">
+        匯入會<b>覆蓋目前資料</b>。如果你已加入房間，可選擇是否同步到房間（會影響所有人）。
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="kv" id="backupKv"></div>
+
+      <div class="hr"></div>
+
+      <div class="hint" id="backupWarn" style="margin-top:0"></div>
+    </div>
+    <div class="modalFoot" id="backupFoot">
+      <button class="btn" id="backupCancel">取消</button>
+      <button class="btn primary" id="backupImportLocal">只匯入本機</button>
+      <button class="btn danger" id="backupImportSync" style="display:none">匯入並同步到房間</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
-  import {
-    getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp
-  } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
 
-  // ✅ 你的 Firebase config（已填入）
+  // ✅ 你的 Firebase config（原樣）
   const firebaseConfig = {
     apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
     authDomain: "aion-2-timer.firebaseapp.com",
     projectId: "aion-2-timer",
     storageBucket: "aion-2-timer.firebasestorage.app",
     messagingSenderId: "385544715160",
-    appId: "1:385c0b9ba8c380226cb89ed".replace("385c0","385544715160:web:25c0b9ba8c380226cb89ed".split(":")[0]), /* no-op */
+    appId: "1:385544715160:web:25c0b9ba8c380226cb89ed",
     measurementId: "G-3Q914TBN8P"
   };
-  // ↑ 上面為了避免貼上時被某些平台誤改字串做了 no-op，真正 appId 仍然正確
-  firebaseConfig.appId = "1:385544715160:web:25c0b9ba8c380226cb89ed";
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -374,7 +407,7 @@
   };
 
   const defaultState = () => ({
-    version: 5,
+    version: 6,
     settings: { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false },
     activeChannelId: "ch-0",
     channels: preset.channels.map((ch, idx) => ({
@@ -397,34 +430,42 @@
   // =========================
   // 本機暫存
   // =========================
-  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v5";
+  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v6";
   const loadLocal = () => { try { const raw = localStorage.getItem(LOCAL_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
   const saveLocal = (s) => localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
 
   // 本機 UI 偏好（不同步）
-  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v4";
+  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v5";
   const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
   const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
   let uiPref = loadUI() || { font: "md", onlyFav: false, soundWarn: "sharp", soundSpawn: "double" };
-  if (!uiPref.soundWarn) uiPref.soundWarn = "sharp";
-  if (!uiPref.soundSpawn) uiPref.soundSpawn = "double";
 
   let state = loadLocal() || defaultState();
 
   // 向下相容：補欄位
-  (function migrateIfNeeded(){
-    let changed = false;
-    if(state?.channels){
-      for(const ch of state.channels){
-        for(const b of (ch.bosses||[])){
-          if(b.location === undefined){ b.location = ""; changed = true; }
-          if(b.note === undefined){ b.note = ""; changed = true; }
-          if(b.notified === undefined){ b.notified = false; changed = true; }
-        }
+  function normalizeState(s){
+    if(!s || !s.channels) return s;
+    for(const ch of s.channels){
+      ch.bosses ||= [];
+      for(const b of ch.bosses){
+        if(b.location === undefined) b.location = "";
+        if(b.note === undefined) b.note = "";
+        if(b.notified === undefined) b.notified = false;
+        if(b.starred === undefined) b.starred = false;
+        if(b.lastKillAt === undefined) b.lastKillAt = now();
       }
     }
-    if(changed) saveLocal(state);
-  })();
+    if(!s.settings) s.settings = { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false };
+    if(s.settings.notifyBeforeMin === undefined) s.settings.notifyBeforeMin = 3;
+    if(s.settings.eventMode === undefined) s.settings.eventMode = false;
+    if(s.settings.volume === undefined) s.settings.volume = 0.60;
+    if(s.settings.muted === undefined) s.settings.muted = false;
+    if(s.settings.soundEnabled === undefined) s.settings.soundEnabled = false;
+    if(!s.activeChannelId && s.channels?.[0]?.id) s.activeChannelId = s.channels[0].id;
+    return s;
+  }
+  state = normalizeState(state);
+  saveLocal(state);
 
   // =========================
   // Firestore 房間同步
@@ -452,18 +493,7 @@
       if(!data?.state) return;
 
       applyingRemote = true;
-      state = data.state;
-
-      if(state?.channels){
-        for(const ch of state.channels){
-          for(const b of (ch.bosses||[])){
-            if(b.location === undefined) b.location = "";
-            if(b.note === undefined) b.note = "";
-            if(b.notified === undefined) b.notified = false;
-          }
-        }
-      }
-
+      state = normalizeState(data.state);
       saveLocal(state);
       render();
       applyingRemote = false;
@@ -510,6 +540,10 @@
 
   const dot = $("#dot");
   const cloudStatus = $("#cloudStatus");
+
+  const btnExport = $("#btnExport");
+  const btnImport = $("#btnImport");
+  const fileImport = $("#fileImport");
 
   function setCloudOk(ok, msg){
     dot.classList.toggle("ok", !!ok);
@@ -699,7 +733,6 @@
 
   tpOK.onclick = () => {
     let raw = (tpTime.value || "").trim();
-
     if(!raw){
       alert("請輸入時間，例如 0730 或 7:30");
       tpTime.focus();
@@ -728,7 +761,6 @@
       return;
     }
 
-    // 回填為 HH:MM
     tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 
     const d = new Date();
@@ -739,18 +771,178 @@
     closeTimePicker();
   };
 
-  // Enter 也可送出
   tpTime.addEventListener("keydown", (e) => {
     if(e.key === "Enter") tpOK.click();
   });
 
-  // Esc 關閉
   window.addEventListener("keydown", (e) => {
     if(e.key === "Escape" && timeMask.style.display === "flex"){
       if(timePickerResolve) timePickerResolve(null);
       closeTimePicker();
     }
   });
+
+  // =========================
+  // 備份：匯出 / 匯入 + 摘要
+  // =========================
+  const backupMask = $("#backupMask");
+  const backupKv = $("#backupKv");
+  const backupWarn = $("#backupWarn");
+  const backupCancel = $("#backupCancel");
+  const backupImportLocal = $("#backupImportLocal");
+  const backupImportSync = $("#backupImportSync");
+
+  let pendingBackup = null; // {meta, state}
+
+  function openBackupModal(summary){
+    backupKv.innerHTML = summary.kv.map(([k,v]) => `
+      <div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div>
+    `).join("");
+
+    backupWarn.textContent = summary.warnText || "";
+    backupImportSync.style.display = roomId ? "inline-flex" : "none";
+
+    backupMask.style.display = "flex";
+    backupMask.setAttribute("aria-hidden", "false");
+  }
+
+  function closeBackupModal(){
+    backupMask.style.display = "none";
+    backupMask.setAttribute("aria-hidden", "true");
+    pendingBackup = null;
+  }
+
+  backupCancel.onclick = () => closeBackupModal();
+  backupMask.addEventListener("click", (e) => {
+    if(e.target === backupMask) closeBackupModal();
+  });
+
+  function countBackupInfo(s){
+    const chN = s?.channels?.length || 0;
+    let bossN = 0, starredN = 0, hasTime = false;
+    for(const ch of (s.channels || [])){
+      bossN += (ch.bosses || []).length;
+      for(const b of (ch.bosses || [])){
+        if(b.starred) starredN++;
+        if(typeof b.lastKillAt === "number") hasTime = true;
+      }
+    }
+    return { chN, bossN, starredN, hasTime };
+  }
+
+  function buildBackupSummary(data){
+    const st = data?.state;
+    const meta = {
+      exportedAt: data?.exportedAt || "",
+      roomId: data?.roomId ?? null,
+      version: data?.version ?? st?.version ?? "",
+      fileName: data?.fileName || ""
+    };
+
+    const info = countBackupInfo(st);
+    const exp = meta.exportedAt ? new Date(meta.exportedAt) : null;
+
+    const kv = [
+      ["檔案", meta.fileName || "（未提供）"],
+      ["備份時間", exp && !isNaN(exp) ? exp.toLocaleString() : "（未知）"],
+      ["備份版本", String(meta.version || "（未知）")],
+      ["備份房間", meta.roomId ? String(meta.roomId) : "（未記錄）"],
+      ["分流數", String(info.chN)],
+      ["BOSS 總數", String(info.bossN)],
+      ["收藏數（⭐）", String(info.starredN)],
+      ["包含時間資料", info.hasTime ? "是" : "否"]
+    ];
+
+    let warnText = "";
+    if(roomId && meta.roomId && meta.roomId !== roomId){
+      warnText = `注意：此備份的房間為「${meta.roomId}」，你目前加入的房間為「${roomId}」。若選擇「匯入並同步到房間」，將覆蓋目前房間所有人的資料。`;
+    }else if(roomId && !meta.roomId){
+      warnText = `注意：此備份沒有房間資訊。若選擇「匯入並同步到房間」，將覆蓋目前房間所有人的資料。`;
+    }else{
+      warnText = `提示：選「只匯入本機」只影響你的瀏覽器；選「匯入並同步到房間」會覆蓋房間所有人。`;
+    }
+
+    return { kv, warnText, meta, info };
+  }
+
+  btnExport.onclick = () => {
+    const payload = {
+      version: state.version,
+      exportedAt: new Date().toISOString(),
+      roomId: roomId || null,
+      state
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+
+    const ts = new Date();
+    const name = `aion2-boss-backup-${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,"0")}${String(ts.getDate()).padStart(2,"0")}-${String(ts.getHours()).padStart(2,"0")}${String(ts.getMinutes()).padStart(2,"0")}.json`;
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  btnImport.onclick = () => fileImport.click();
+
+  fileImport.onchange = async (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      if(!data || !data.state || !Array.isArray(data.state.channels)){
+        alert("備份檔格式不正確（缺少 state/channels）");
+        return;
+      }
+
+      data.fileName = file.name;
+      data.state = normalizeState(data.state);
+
+      pendingBackup = data;
+
+      const summary = buildBackupSummary(pendingBackup);
+      openBackupModal(summary);
+
+    }catch(err){
+      console.error(err);
+      alert("匯入失敗：請確認檔案是否為有效 JSON");
+    }finally{
+      fileImport.value = "";
+    }
+  };
+
+  async function applyImport({syncToRoom}){
+    if(!pendingBackup?.state) return;
+
+    state = normalizeState(pendingBackup.state);
+    saveLocal(state);
+    render();
+
+    if(syncToRoom && roomId){
+      await pushToCloud();
+    }
+    closeBackupModal();
+    alert(syncToRoom && roomId ? "匯入完成（已同步到房間）" : "匯入完成（只影響本機）");
+  }
+
+  backupImportLocal.onclick = async () => {
+    if(!confirm("確定要匯入備份並覆蓋目前資料（只影響本機）？")) return;
+    await applyImport({syncToRoom:false});
+  };
+
+  backupImportSync.onclick = async () => {
+    if(!roomId){
+      alert("你尚未加入房間，無法同步到房間。");
+      return;
+    }
+    if(!confirm("⚠️ 確定要匯入備份並同步到房間？這會覆蓋房間所有人的資料。")) return;
+    await applyImport({syncToRoom:true});
+  };
 
   // =========================
   // Render
@@ -1117,3 +1309,4 @@
 </script>
 </body>
 </html>
+
