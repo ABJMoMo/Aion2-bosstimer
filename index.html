@@ -26,7 +26,7 @@
       display:flex; gap:12px; align-items:flex-start; justify-content:space-between;
       padding:16px; background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
       border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);
-      position:static; top:auto; z-index:10; backdrop-filter: blur(10px);
+      position:sticky; top:12px; z-index:10; backdrop-filter: blur(10px);
     }
     .title{display:flex; flex-direction:column; gap:6px; min-width:260px}
     .title h1{margin:0; font-size:18px; letter-spacing:.2px}
@@ -130,6 +130,7 @@
       padding:12px 14px; border-top:1px solid var(--line);
       display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;
     }
+
     .kv{display:grid; grid-template-columns: 120px 1fr; gap:8px 12px; margin-top:10px}
     .kv .k{color:var(--muted); font-size:12px}
     .kv .v{font-size:12px}
@@ -151,113 +152,23 @@
     }
     body.locked .lockBanner{display:block}
 
-    /* ===== 下拉選單深色（避免白底白字） ===== */
-    select{
+    /* 修正下拉選單在暗色背景的顯示 */
+    select {
       background-color: #121a2a;
       color: #e8eefc;
       border: 1px solid rgba(255,255,255,.2);
     }
-    select option{
+    select option {
       background-color: #121a2a;
       color: #e8eefc;
     }
-    select option:checked{
-      background-color:#1f2a44;
-      color:#ffffff;
+    select option:checked {
+      background-color: #1f2a44;
+      color: #ffffff;
     }
-
-    /* ===== 地圖提示（天族）+ marker ===== */
-    .mapWrap{
-      position:relative;
-      width:100%;
-      border-radius:16px;
-      overflow:hidden;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.03);
-      touch-action: none; /* 讓觸控縮放/拖曳可用 */
-    }
-    .mapInner{
-      position:relative;
-      transform-origin: 0 0;
-      will-change: transform;
-    }
-    .mapImg{
-      width:100%;
-      height:auto;
-      display:block;
-      user-select:none;
-      -webkit-user-drag:none;
-    }
-    .mapOverlay{
-      position:absolute;
-      inset:0;
-      pointer-events:none;
-    }
-    .marker{
-      position:absolute;
-      width:14px; height:14px; border-radius:999px;
-      transform: translate(-50%,-50%);
-      background: var(--accent);
-      box-shadow: 0 0 12px rgba(122,167,255,.8);
-      border:1px solid rgba(255,255,255,.35);
-      pointer-events:auto;
-      cursor:pointer;
-    }
-    .marker.normal{ opacity:.85; }
-    .marker.warn{
-      background: var(--warn);
-      box-shadow: 0 0 14px rgba(255,209,102,.9);
-      animation: pulseSlow 1s infinite;
-    }
-    .marker.danger{
-      background: var(--danger);
-      box-shadow: 0 0 16px rgba(255,107,107,.95);
-      animation: pulseFast .4s infinite;
-    }
-    @keyframes pulseSlow{
-      0%   { transform:translate(-50%,-50%) scale(1);   opacity:.65; }
-      50%  { transform:translate(-50%,-50%) scale(1.6); opacity:1; }
-      100% { transform:translate(-50%,-50%) scale(1);   opacity:.65; }
-    }
-    @keyframes pulseFast{
-      0%   { transform:translate(-50%,-50%) scale(1);   opacity:.55; }
-      50%  { transform:translate(-50%,-50%) scale(1.9); opacity:1; }
-      100% { transform:translate(-50%,-50%) scale(1);   opacity:.55; }
-    }
-
-    /* 點圖取座標：預覽十字 */
-    .marker.preview{
-      background: rgba(122,167,255,.0);
-      box-shadow: none;
-      border: 2px solid rgba(255,255,255,.9);
-      width:16px; height:16px;
-    }
-    .marker.preview::before{
-      content:"";
-      position:absolute;
-      left:50%; top:50%;
-      width:20px; height:2px;
-      background: rgba(255,255,255,.9);
-      transform:translate(-50%,-50%);
-    }
-    .marker.preview::after{
-      content:"";
-      position:absolute;
-      left:50%; top:50%;
-      width:2px; height:20px;
-      background: rgba(255,255,255,.9);
-      transform:translate(-50%,-50%);
-    }
-
-    .mapHud{
-      position:absolute;
-      right:10px;
-      bottom:10px;
-      display:flex;
-      gap:8px;
-      align-items:center;
-      z-index:5;
-      pointer-events:auto;
+    select option:hover {
+      background-color: #24335c;
+      color: #ffffff;
     }
   </style>
 </head>
@@ -269,7 +180,7 @@
       <h1>AION 2｜BOSS 倒數計時器（多人共用）</h1>
       <div class="sub">
         同一個 Room ID 的人會同步看到同一份倒數資料（擊殺/編輯/新增會即時同步）。<br>
-        ※ 「字體/只看收藏/提示音選單/地圖視角」為本機偏好，不會同步到房間。
+        ※ 「字體/只看收藏/提示音選單」為本機偏好，不會同步到房間。
       </div>
 
       <div class="roombar" style="margin-top:8px">
@@ -383,7 +294,7 @@
 
         <div class="hint">
           <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
-          已刷新後 <b>15 秒</b> 若沒人按「擊殺」，會自動重置該王倒數並同步到房間。
+          BOSS 刷新時會進入右側的 <b>「最近重生」</b>；刷新後 <b>15 秒</b> 會自動開始下一輪倒數，但仍保留在最近重生，直到 <b>5 分鐘</b> 後自動忽略移出列表（或你按「擊殺/忽略」立刻移除）。
         </div>
 
         <div class="list" id="bossList"></div>
@@ -393,41 +304,16 @@
     <div class="card">
       <div class="body">
 
-        <!-- 地圖提示（天族 only） -->
+        <!-- 🟠 最近重生 -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-          <b>🗺 天族地圖提示</b>
-          <span class="badge" id="mapHintBadge">只顯示即將/已刷新</span>
+          <b>🟠 最近重生</b>
+          <span class="badge" id="recentCount">0</span>
         </div>
+        <div id="recentBox"></div>
 
-        <div class="hint" style="margin-top:8px">
-          只有「天族」分流且有設定座標的 BOSS 才會出現在地圖上。  
-          可用「📍設座標」→ 點地圖完成定位。
-        </div>
+        <div class="hr" style="margin:14px 0;"></div>
 
-        <div class="chip" style="display:flex;gap:10px;align-items:center;margin-top:10px;">
-          <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
-            <input type="checkbox" id="chkMapOnlyHot" />
-            只顯示即將/已刷新
-          </label>
-        </div>
-
-        <div class="mapWrap" id="mapWrap" style="margin-top:10px">
-          <div class="mapInner" id="mapInner">
-            <img class="mapImg" id="mapImg" src="assets/maps/elyos_main.png" alt="天族地圖" />
-            <div class="mapOverlay" id="mapOverlay"></div>
-          </div>
-
-          <div class="mapHud">
-            <button class="btn" id="btnMapReset" style="padding:6px 10px">重置視角</button>
-            <span class="badge" id="mapZoomLabel">100%</span>
-          </div>
-        </div>
-
-        <div class="hint" id="mapPickHint" style="margin-top:8px;display:none"></div>
-
-        <div class="hr"></div>
-
-        <!-- 收藏 -->
+        <!-- ⭐ 收藏 -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <b>⭐ 收藏</b>
           <span class="badge" id="favCount">0</span>
@@ -435,7 +321,7 @@
         <div id="favBox"></div>
 
         <div class="hint" style="margin-top:14px">
-          ※ 字體大小 / 只看收藏 / 提示音選單 / 地圖視角 為本機偏好，不會同步到房間。
+          ※ 字體大小 / 只看收藏 / 提示音選單為本機偏好，不會同步到房間。
         </div>
       </div>
     </div>
@@ -523,7 +409,7 @@
   const db = getFirestore(app);
 
   // =========================
-  // Client ID
+  // Client ID（房主、加入序、線上狀態）
   // =========================
   const CLIENT_KEY = "aion2_bosstimer_client_id_v1";
   function getClientId(){
@@ -537,30 +423,12 @@
   const clientId = getClientId();
 
   // =========================
-  // 基本工具
+  // 基本資料
   // =========================
   const now = () => Date.now();
   const uid = (p) => `${p}-${Math.random().toString(16).slice(2,9)}${Date.now().toString(16).slice(-4)}`;
-  const pad2 = n => String(n).padStart(2,"0");
-  const fmtDuration = (ms) => {
-    ms = Math.max(0, ms);
-    const s = Math.floor(ms/1000);
-    const hh = Math.floor(s/3600);
-    const mm = Math.floor((s%3600)/60);
-    const ss = s%60;
-    return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
-  };
-  const fmtTime = (ts) => {
-    const d = new Date(ts);
-    return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  };
-  const fmtDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-  const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
-  // =========================
-  // 預設資料
-  // =========================
+  // ✅ 你目前的預設 BOSS（可自行編輯/新增）
   const preset = {
     channels: [
       { name:"天族", bosses:[
@@ -640,10 +508,23 @@
         lastKillAt: now() - (i%5)*12*60*1000,
         starred: false,
         notified: false
-        // map: { mapId:"elyos_main", x:0.5, y:0.5 } // 需要才加
       }))
     }))
   });
+
+  // =========================
+  // LocalStorage（資料 + UI 偏好）
+  // =========================
+  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v8";
+  const loadLocal = () => { try { const raw = localStorage.getItem(LOCAL_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const saveLocal = (s) => localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
+
+  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v8";
+  const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
+  let uiPref = loadUI() || { font: "md", onlyFav: false, soundWarn: "sharp", soundSpawn: "double" };
+
+  let state = loadLocal() || defaultState();
 
   function normalizeState(s){
     if(!s || !s.channels) return s;
@@ -655,6 +536,9 @@
         if(b.notified === undefined) b.notified = false;
         if(b.starred === undefined) b.starred = false;
         if(b.lastKillAt === undefined) b.lastKillAt = now();
+        // ✅ 最近重生欄位
+        // _recentShownAt: number
+        // _recentIgnored: boolean
       }
     }
     if(!s.settings) s.settings = { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false };
@@ -666,27 +550,7 @@
     if(!s.activeChannelId && s.channels?.[0]?.id) s.activeChannelId = s.channels[0].id;
     return s;
   }
-
-  // =========================
-  // LocalStorage（資料 + UI 偏好）
-  // =========================
-  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v8";
-  const loadLocal = () => { try { const raw = localStorage.getItem(LOCAL_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
-  const saveLocal = (s) => localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
-
-  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v7";
-  const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
-  const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
-
-  let uiPref = loadUI() || {
-    font: "md",
-    onlyFav: false,
-    soundWarn: "sharp",
-    soundSpawn: "double",
-    mapOnlyHot: true
-  };
-
-  let state = normalizeState(loadLocal() || defaultState());
+  state = normalizeState(state);
   saveLocal(state);
 
   // =========================
@@ -699,6 +563,7 @@
   const presenceColRef = () => collection(db, "rooms", roomId, "presence");
   const presenceDocRef = () => doc(db, "rooms", roomId, "presence", clientId);
 
+  // UI：身分/加入序/線上數
   const roleLabel = document.querySelector("#roleLabel");
   const joinIndexLabel = document.querySelector("#joinIndexLabel");
   const onlineLabel = document.querySelector("#onlineLabel");
@@ -713,7 +578,7 @@
     if(text) lockBanner.textContent = text;
   }
 
-  // cloud status
+  // cloud status chip
   const dot = document.querySelector("#dot");
   const cloudStatus = document.querySelector("#cloudStatus");
   function setCloudStatus(text, ok=null){
@@ -722,7 +587,7 @@
     dot.classList.toggle("bad", ok === false);
   }
 
-  // presence
+  // presence / heartbeat
   let unsubPresence = null;
   let presenceTimer = null;
 
@@ -761,7 +626,7 @@
     if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
   }
 
-  // Transaction：建立房間 meta（hostId/joinSeq）
+  // ✅ Transaction：建立房間 meta（hostId/joinSeq）並返回加入序
   async function ensureRoomAndJoinMeta(){
     const ref = roomDocRef();
     const result = await runTransaction(db, async (tx) => {
@@ -821,6 +686,7 @@
         setLocked(false);
       }
 
+      // 更新房主顯示（若 meta.hostId 存在）
       const hostId = data?.meta?.hostId;
       if(hostId){
         isHost = (hostId === clientId);
@@ -848,12 +714,13 @@
   }
 
   // =========================
-  // UI / 倒數計算
+  // UI / 倒數
   // =========================
   const $ = (q) => document.querySelector(q);
-
   const tabsEl = $("#tabs");
   const listEl = $("#bossList");
+  const recentBox = $("#recentBox");
+  const recentCount = $("#recentCount");
   const favBox = $("#favBox");
   const favCount = $("#favCount");
 
@@ -874,50 +741,7 @@
   const btnImport = $("#btnImport");
   const fileImport = $("#fileImport");
 
-  // 地圖 DOM
-  const mapWrap = $("#mapWrap");
-  const mapInner = $("#mapInner");
-  const mapImg = $("#mapImg");
-  const mapOverlay = $("#mapOverlay");
-  const chkMapOnlyHot = $("#chkMapOnlyHot");
-  const mapHintBadge = $("#mapHintBadge");
-  const mapPickHint = $("#mapPickHint");
-  const btnMapReset = $("#btnMapReset");
-  const mapZoomLabel = $("#mapZoomLabel");
-
-  const activeChannel = () => state.channels.find(c => c.id === state.activeChannelId) || state.channels[0];
-  const respawnMin = (b) => {
-    const em = state.settings.eventMode;
-    const m = em ? (b.eventMin ?? b.baseMin) : (b.baseMin ?? b.eventMin);
-    return Math.max(0, Number(m)||0);
-  };
-  const nextSpawn = (b) => (b.lastKillAt ?? 0) + respawnMin(b) * 60 * 1000;
-
-  const sortBosses = (arr) => [...arr].sort((a,b)=> nextSpawn(a)-nextSpawn(b));
-  const computeStatus = (remainMs, notifyBeforeMin) => {
-    const notifyMs = (notifyBeforeMin ?? 0) * 60 * 1000;
-    if(remainMs <= 0) return {text:"已刷新", cls:"danger"};
-    if(remainMs <= notifyMs) return {text:`即將刷新（≤${notifyBeforeMin} 分）`, cls:"warn"};
-    return {text:"計時中", cls:"good"};
-  };
-
-  const mkBtn = (text, cls, onClick) => {
-    const b = document.createElement("button");
-    b.className = cls;
-    b.textContent = text;
-    b.onclick = onClick;
-    return b;
-  };
-
-  const allStarred = () => {
-    const out = [];
-    for(const ch of state.channels) for(const b of ch.bosses) if(b.starred) out.push({ch,b});
-    return out.sort((x,y)=> nextSpawn(x.b)-nextSpawn(y.b));
-  };
-
-  // =========================
-  // 提示音：不同狀態不同音效
-  // =========================
+  // ===== 提示音（選單 + 不同狀態）=====
   let audioCtx = null;
   function ensureAudio(){
     if(!audioCtx){
@@ -993,7 +817,152 @@
     if(mode === "double"){ playDouble(); return; }
     if(mode === "soft"){ playTone({ type:"sine", freq:660, dur:0.30 }); return; }
     if(mode === "alarm"){ playTone({ type:"square", freq:900, dur:0.18 }); return; }
+
     playTone({ type:"triangle", freq:1200, dur:0.22 }); // sharp
+  }
+
+  const pad2 = n => String(n).padStart(2,"0");
+  const fmtDuration = (ms) => {
+    ms = Math.max(0, ms);
+    const s = Math.floor(ms/1000);
+    const hh = Math.floor(s/3600);
+    const mm = Math.floor((s%3600)/60);
+    const ss = s%60;
+    return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+  };
+  const fmtTime = (ts) => {
+    const d = new Date(ts);
+    return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  };
+  const fmtDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+  const activeChannel = () => state.channels.find(c => c.id === state.activeChannelId) || state.channels[0];
+  const respawnMin = (b) => {
+    const em = state.settings.eventMode;
+    const m = em ? (b.eventMin ?? b.baseMin) : (b.baseMin ?? b.eventMin);
+    return Math.max(0, Number(m)||0);
+  };
+  const nextSpawn = (b) => (b.lastKillAt ?? 0) + respawnMin(b) * 60 * 1000;
+  const sortBosses = (arr) => [...arr].sort((a,b)=> nextSpawn(a)-nextSpawn(b));
+  const computeStatus = (remainMs, notifyBeforeMin) => {
+    const notifyMs = (notifyBeforeMin ?? 0) * 60 * 1000;
+    if(remainMs <= 0) return {text:"已刷新", cls:"danger"};
+    if(remainMs <= notifyMs) return {text:`即將刷新（≤${notifyBeforeMin} 分）`, cls:"warn"};
+    return {text:"計時中", cls:"good"};
+  };
+  const mkBtn = (text, cls, onClick) => {
+    const b = document.createElement("button");
+    b.className = cls;
+    b.textContent = text;
+    b.onclick = onClick;
+    return b;
+  };
+  const allStarred = () => {
+    const out = [];
+    for(const ch of state.channels) for(const b of ch.bosses) if(b.starred) out.push({ch,b});
+    return out.sort((x,y)=> nextSpawn(x.b)-nextSpawn(y.b));
+  };
+
+  // =========================
+  // 🟠 最近重生：收集/渲染（最多顯示 10 隻）
+  // =========================
+  function getRecentRespawns(){
+    const items = [];
+    const TTL_MS = 5 * 60 * 1000; // 5 分鐘後自動忽略
+    const t = now();
+
+    for(const ch of state.channels){
+      for(const b of (ch.bosses || [])){
+        if(b._recentShownAt && !b._recentIgnored){
+          if(t - b._recentShownAt <= TTL_MS){
+            items.push({ ch, b });
+          }
+        }
+      }
+    }
+    items.sort((x,y) => (y.b._recentShownAt||0) - (x.b._recentShownAt||0));
+    return items;
+  }
+
+  function renderRecentRespawns(){
+    const itemsAll = getRecentRespawns();
+    const items = itemsAll.slice(0, 10); // ✅ 最多顯示 10 隻
+    recentCount.textContent = String(items.length);
+    recentBox.innerHTML = "";
+
+    if(items.length === 0){
+      const e = document.createElement("div");
+      e.className = "tiny muted";
+      e.style.marginTop = "10px";
+      e.textContent = "目前沒有「最近重生」的 BOSS。";
+      recentBox.appendChild(e);
+      return;
+    }
+
+    for(const { ch, b } of items){
+      const row = document.createElement("div");
+      row.className = "favitem";
+
+      const left = document.createElement("div");
+      left.className = "left";
+
+      const sinceMs = now() - (b._recentShownAt || now());
+      const sinceMin = Math.floor(sinceMs / 60000);
+      const sinceSec = Math.floor((sinceMs % 60000) / 1000);
+
+      left.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap">
+          <span class="badge">${escapeHtml(ch.name)}</span>
+          ${b.location ? `<span class="badge">${escapeHtml(b.location)}</span>` : ""}
+          <b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(b.name)}</b>
+        </div>
+        <div class="tiny mono">
+          已重生：${pad2(sinceMin)}:${pad2(sinceSec)}
+          <span class="muted">｜</span> 下次：${fmtTime(nextSpawn(b))}
+        </div>
+      `;
+
+      const right = document.createElement("div");
+      right.className = "actions";
+
+      right.append(
+        mkBtn("前往", "btn", async () => {
+          state.activeChannelId = ch.id;
+          saveLocal(state);
+          render();
+          await pushToCloud();
+          window.scrollTo({top:0, behavior:"smooth"});
+        }),
+
+        mkBtn("擊殺", "btn good", async () => {
+          b.lastKillAt = now();
+          b.notified = false;
+
+          // ✅ 點擊殺：代表已處理，移出最近重生
+          delete b._recentShownAt;
+          delete b._recentIgnored;
+
+          saveLocal(state);
+          render();
+          await pushToCloud();
+        }),
+
+        mkBtn("忽略", "btn danger", async () => {
+          // ✅ 忽略：立刻移出最近重生
+          b._recentIgnored = true;
+          delete b._recentShownAt;
+
+          saveLocal(state);
+          render();
+          await pushToCloud();
+        })
+      );
+
+      row.append(left, right);
+      recentBox.appendChild(row);
+    }
   }
 
   // =========================
@@ -1229,79 +1198,6 @@
   };
 
   // =========================
-  // 地圖視角（縮放/拖曳）— 本機保存
-  // =========================
-  let view = { scale: 1, tx: 0, ty: 0 };
-  const VIEW_KEY = "aion2_map_view_elyos_v1";
-
-  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
-
-  function loadView(){
-    try{
-      const raw = localStorage.getItem(VIEW_KEY);
-      if(!raw) return;
-      const v = JSON.parse(raw);
-      if(typeof v.scale==="number" && typeof v.tx==="number" && typeof v.ty==="number"){
-        view = v;
-      }
-    }catch{}
-  }
-  function saveView(){ localStorage.setItem(VIEW_KEY, JSON.stringify(view)); }
-
-  function applyView(){
-    if(!mapInner) return;
-    mapInner.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
-    if(mapZoomLabel) mapZoomLabel.textContent = `${Math.round(view.scale*100)}%`;
-  }
-
-  function resetView(){
-    view = { scale: 1, tx: 0, ty: 0 };
-    saveView();
-    applyView();
-  }
-
-  // =========================
-  // 點圖取座標（天族）
-  // =========================
-  let mapPickBossId = null;
-  let mapPickPreview = null; // {x,y}
-
-  function cancelMapPickMode(){
-    mapPickBossId = null;
-    mapPickPreview = null;
-    if(mapPickHint){
-      mapPickHint.style.display = "none";
-      mapPickHint.textContent = "";
-    }
-    renderMapMarkers();
-  }
-
-  function setMapPickMode(bossId, bossName){
-    mapPickBossId = bossId;
-    if(mapPickHint){
-      mapPickHint.style.display = "block";
-      mapPickHint.innerHTML = `
-        ✅ 已選擇：<b>${escapeHtml(bossName)}</b>（請在地圖上點一下設定座標）
-        <button class="btn" id="btnCancelPick" style="margin-left:10px;padding:6px 10px">取消</button>
-      `;
-      setTimeout(() => {
-        const btn = document.querySelector("#btnCancelPick");
-        if(btn) btn.onclick = () => cancelMapPickMode();
-      }, 0);
-    }
-    mapWrap?.scrollIntoView({behavior:"smooth", block:"center"});
-  }
-
-  function getBossById(bossId){
-    for(const ch of state.channels){
-      for(const b of (ch.bosses || [])){
-        if(b.id === bossId) return { ch, b };
-      }
-    }
-    return null;
-  }
-
-  // =========================
   // Render
   // =========================
   function render(){
@@ -1319,10 +1215,6 @@
     btnMute.textContent = state.settings.muted ? "取消靜音" : "靜音";
     notifyMin.value = state.settings.notifyBeforeMin ?? 3;
     roomLabel.textContent = roomId ? roomId : "（未加入）";
-
-    // 地圖 UI 偏好
-    chkMapOnlyHot.checked = (uiPref.mapOnlyHot !== false);
-    mapHintBadge.textContent = chkMapOnlyHot.checked ? "只顯示即將/已刷新" : "顯示所有有座標的點";
 
     tabsEl.innerHTML = "";
     state.channels.forEach(ch => {
@@ -1349,6 +1241,10 @@
       bosses.forEach(b => listEl.appendChild(renderBossItem(ch, b)));
     }
 
+    // ✅ 先渲染最近重生
+    renderRecentRespawns();
+
+    // ⭐ 收藏
     const starred = allStarred();
     favCount.textContent = starred.length;
     favBox.innerHTML = "";
@@ -1359,8 +1255,8 @@
       favBox.appendChild(e);
     }else{
       for(const {ch, b} of starred){
-        const renderRow = document.createElement("div");
-        renderRow.className = "favitem";
+        const row = document.createElement("div");
+        row.className = "favitem";
         const left = document.createElement("div");
         left.className = "left";
         left.innerHTML = `
@@ -1374,25 +1270,18 @@
         const right = document.createElement("div");
         right.className = "actions";
         right.append(
-          mkBtn("前往", "btn", async () => {
-            state.activeChannelId = ch.id; saveLocal(state); render(); await pushToCloud();
-            window.scrollTo({top:0,behavior:"smooth"});
-          }),
+          mkBtn("前往", "btn", async () => { state.activeChannelId = ch.id; saveLocal(state); render(); await pushToCloud(); window.scrollTo({top:0,behavior:"smooth"}); }),
           mkBtn("取消⭐", "btn", async () => { b.starred=false; saveLocal(state); render(); await pushToCloud(); })
         );
-        renderRow.append(left, right);
-        favBox.appendChild(renderRow);
+        row.append(left, right);
+        favBox.appendChild(row);
       }
     }
-
-    renderMapMarkers();
   }
 
   function renderBossItem(ch, b){
     const item = document.createElement("div");
     item.className = "item";
-    item.dataset.bossId = b.id;
-
     const meta = document.createElement("div");
     meta.className = "meta";
 
@@ -1444,7 +1333,11 @@
       mkBtn("擊殺", "btn good", async () => {
         b.lastKillAt = now();
         b.notified = false;
-        delete b._spawnedAt;
+
+        // ✅ 點擊殺：代表已處理，移出最近重生
+        delete b._recentShownAt;
+        delete b._recentIgnored;
+
         saveLocal(state); render(); await pushToCloud();
       }),
       mkBtn("手動設定", "btn", async () => {
@@ -1452,15 +1345,13 @@
         if(!ts) return;
         b.lastKillAt = ts;
         b.notified = false;
-        delete b._spawnedAt;
+
+        // 手動設定也視為已處理 → 移出最近重生
+        delete b._recentShownAt;
+        delete b._recentIgnored;
+
         saveLocal(state); render(); await pushToCloud();
       }),
-
-      ...(ch.name === "天族"
-        ? [mkBtn("📍設座標", "btn", () => setMapPickMode(b.id, b.name))]
-        : []
-      ),
-
       mkBtn("編輯", "btn primary", async () => {
         const newName = prompt("BOSS 名稱（繁中）：", b.name);
         if(newName === null) return;
@@ -1472,15 +1363,6 @@
         if(eventMin === null) return;
         const newNote = prompt("備註（可留空）：", b.note || "");
         if(newNote === null) return;
-
-        // 天族地圖座標（0~100，可留空）
-        let mx = "", my = "";
-        if(ch.name === "天族"){
-          mx = prompt("地圖X（0~100，留空=不顯示在地圖）：", (b.map && b.map.mapId==="elyos_main") ? String(Math.round(b.map.x*100)) : "") ?? null;
-          if(mx === null) return;
-          my = prompt("地圖Y（0~100，留空=不顯示在地圖）：", (b.map && b.map.mapId==="elyos_main") ? String(Math.round(b.map.y*100)) : "") ?? null;
-          if(my === null) return;
-        }
 
         const bM = Number(baseMin), eM = Number(eventMin);
         if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){
@@ -1494,29 +1376,15 @@
         b.note = newNote.trim();
         b.notified = false;
 
-        if(ch.name === "天族"){
-          const mxv = (mx || "").trim();
-          const myv = (my || "").trim();
-          if(mxv === "" || myv === ""){
-            delete b.map;
-          }else{
-            const x100 = Number(mxv), y100 = Number(myv);
-            if(!Number.isFinite(x100) || !Number.isFinite(y100) || x100<0 || x100>100 || y100<0 || y100>100){
-              alert("地圖座標需為 0~100 的數字（可留空不顯示）");
-            }else{
-              b.map = { mapId:"elyos_main", x: x100/100, y: y100/100 };
-            }
-          }
-        }
+        // 編輯後移出最近重生
+        delete b._recentShownAt;
+        delete b._recentIgnored;
 
         saveLocal(state); render(); await pushToCloud();
       }),
-
       mkBtn("刪除", "btn danger", async () => {
         if(!confirm(`刪除「${b.name}」？`)) return;
-        const found = state.channels.find(x => x.id === ch.id);
-        if(found) found.bosses = found.bosses.filter(x => x.id !== b.id);
-        if(mapPickBossId === b.id) cancelMapPickMode();
+        ch.bosses = ch.bosses.filter(x => x.id !== b.id);
         saveLocal(state); render(); await pushToCloud();
       })
     );
@@ -1526,66 +1394,12 @@
   }
 
   // =========================
-  // 地圖 markers（天族 elyos_main）
-  // =========================
-  function renderMapMarkers(){
-    if(!mapOverlay) return;
-
-    const elyos = state.channels.find(c => c.name === "天族");
-    mapOverlay.innerHTML = "";
-
-    if(!elyos) return;
-
-    const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
-
-    for(const b of (elyos.bosses || [])){
-      if(!b.map || b.map.mapId !== "elyos_main") continue;
-      if(typeof b.map.x !== "number" || typeof b.map.y !== "number") continue;
-
-      const tNext = nextSpawn(b);
-      const remain = tNext - now();
-      const st = computeStatus(remain, notifyBeforeMin);
-
-      if((uiPref.mapOnlyHot !== false) && st.cls === "good") continue;
-
-      const mk = document.createElement("div");
-      mk.className = "marker " + (st.cls === "warn" ? "warn" : st.cls === "danger" ? "danger" : "normal");
-      mk.style.left = (b.map.x * 100) + "%";
-      mk.style.top  = (b.map.y * 100) + "%";
-      mk.title = `${b.name}\n${st.text}\n剩餘：${fmtDuration(remain)}\n位置：${b.location || "—"}`;
-
-      mk.onclick = async () => {
-        state.activeChannelId = elyos.id;
-        saveLocal(state);
-        render();
-        await pushToCloud();
-
-        const target = document.querySelector(`[data-boss-id="${b.id}"]`);
-        if(target) target.scrollIntoView({behavior:"smooth", block:"center"});
-        window.scrollBy({ top: -80, left: 0, behavior: "smooth" });
-      };
-
-      mapOverlay.appendChild(mk);
-    }
-
-    // 預覽十字（點圖取座標）
-    if(mapPickBossId && mapPickPreview){
-      const pv = document.createElement("div");
-      pv.className = "marker preview";
-      pv.style.left = (mapPickPreview.x * 100) + "%";
-      pv.style.top  = (mapPickPreview.y * 100) + "%";
-      pv.title = "預覽點";
-      mapOverlay.appendChild(pv);
-    }
-  }
-
-  // =========================
   // 控制項
   // =========================
   $("#btnResetLocal").onclick = () => {
     if(!confirm("重置本機資料？（不會刪雲端房間）")) return;
     localStorage.removeItem(LOCAL_KEY);
-    state = normalizeState(defaultState());
+    state = defaultState();
     saveLocal(state);
     render();
   };
@@ -1609,7 +1423,6 @@
   chkOnlyFav.onchange = () => { uiPref.onlyFav = chkOnlyFav.checked; saveUI(uiPref); render(); };
   selSoundWarn.onchange = () => { uiPref.soundWarn = selSoundWarn.value; saveUI(uiPref); render(); };
   selSoundSpawn.onchange = () => { uiPref.soundSpawn = selSoundSpawn.value; saveUI(uiPref); render(); };
-  chkMapOnlyHot.onchange = () => { uiPref.mapOnlyHot = chkMapOnlyHot.checked; saveUI(uiPref); render(); };
 
   $("#btnAddBoss").onclick = async () => {
     const name = prompt("BOSS 名稱（繁中）：", "新BOSS");
@@ -1653,13 +1466,17 @@
   };
 
   // =========================
-  // 提醒 + 已刷新 15 秒自動重置（同步）
+  // 提醒 + 最近重生：刷新後 15 秒自動開始倒數，但仍保留最近重生直到 5 分鐘自動忽略
   // =========================
   function checkAlerts(){
     const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
     const notifyMs = notifyBeforeMin * 60 * 1000;
-    const AUTO_RESET_MS = 15 * 1000; // ✅ 15 秒
+
+    const AUTO_START_MS = 15 * 1000;      // ✅ 刷新後 15 秒自動開始下一輪倒數
+    const AUTO_IGNORE_MS = 5 * 60 * 1000; // ✅ 最近重生保留 5 分鐘後自動忽略
+
     let changed = false;
+    const t = now();
 
     for(const ch of state.channels){
       for(const b of ch.bosses){
@@ -1667,8 +1484,9 @@
         if(m <= 0) continue;
 
         const tNext = nextSpawn(b);
-        const remain = tNext - now();
+        const remain = tNext - t;
 
+        // 即將刷新提醒（只提醒一次）
         if(remain > 0 && remain <= notifyMs && !b.notified){
           b.notified = true;
           beep("warn");
@@ -1676,19 +1494,27 @@
         }
 
         if(remain <= 0){
-          if(!b._spawnedAt){
-            b._spawnedAt = now();
+          // ✅ 刷新瞬間：加入「最近重生」（只做一次）
+          if(!b._recentShownAt && !b._recentIgnored){
+            b._recentShownAt = t;
             beep("spawn");
             changed = true;
-          }else if(now() - b._spawnedAt >= AUTO_RESET_MS){
-            b.lastKillAt = now();
-            b.notified = false;
-            delete b._spawnedAt;
-            changed = true;
           }
-        }else{
-          if(b._spawnedAt){
-            delete b._spawnedAt;
+
+          // ✅ 超過 15 秒：自動開始下一輪倒數（但不移出最近重生）
+          if(b._recentShownAt && (t - b._recentShownAt >= AUTO_START_MS)){
+            // 避免每秒一直重置：只做一次（lastKillAt 推到近現在）
+            if(Math.abs((b.lastKillAt ?? 0) - t) > 2000){
+              b.lastKillAt = t;
+              b.notified = false;
+              changed = true;
+            }
+          }
+
+          // ✅ 超過 5 分鐘：自動忽略移出最近重生
+          if(b._recentShownAt && (t - b._recentShownAt >= AUTO_IGNORE_MS)){
+            b._recentIgnored = true;
+            delete b._recentShownAt;
             changed = true;
           }
         }
@@ -1703,7 +1529,7 @@
   }
 
   // =========================
-  // 房間加入/連結
+  // 房間加入/連結（加入既有房間不覆蓋 + UI lock + 加入序/房主/線上）
   // =========================
   const roomInput = $("#roomId");
   const joinBtn = $("#btnJoin");
@@ -1758,183 +1584,7 @@
     alert("已複製房間連結！");
   };
 
-  // =========================
-  // 地圖縮放/拖曳（滑鼠 + 觸控）
-  // =========================
-  loadView();
-  applyView();
-
-  btnMapReset?.addEventListener("click", () => resetView());
-
-  // 滑鼠拖曳
-  let dragging = false;
-  let lastX = 0, lastY = 0;
-
-  mapWrap?.addEventListener("mousedown", (e) => {
-    if(e.button !== 0) return;
-    dragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    e.preventDefault();
-  });
-
-  window.addEventListener("mousemove", (e) => {
-    if(!dragging) return;
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    view.tx += dx;
-    view.ty += dy;
-    applyView();
-  });
-
-  window.addEventListener("mouseup", () => {
-    if(!dragging) return;
-    dragging = false;
-    saveView();
-  });
-
-  // 滾輪縮放（以游標為中心）
-  mapWrap?.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const rect = mapWrap.getBoundingClientRect();
-
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-
-    const oldScale = view.scale;
-    const delta = -e.deltaY;
-    const factor = delta > 0 ? 1.10 : 0.90;
-
-    const newScale = clamp(oldScale * factor, 0.6, 4.0);
-    if(newScale === oldScale) return;
-
-    view.tx = px - (px - view.tx) * (newScale / oldScale);
-    view.ty = py - (py - view.ty) * (newScale / oldScale);
-    view.scale = newScale;
-
-    applyView();
-    saveView();
-  }, { passive: false });
-
-  // 觸控：單指拖曳 / 雙指縮放
-  let touchMode = "none";
-  let tLast = null;
-  let pinchLast = null;
-
-  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
-  function mid(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
-
-  mapWrap?.addEventListener("touchstart", (e) => {
-    if(e.touches.length === 1){
-      touchMode = "pan";
-      tLast = { x:e.touches[0].clientX, y:e.touches[0].clientY };
-    }else if(e.touches.length === 2){
-      touchMode = "pinch";
-      const a = { x:e.touches[0].clientX, y:e.touches[0].clientY };
-      const b = { x:e.touches[1].clientX, y:e.touches[1].clientY };
-      const m = mid(a,b);
-      pinchLast = { dist: dist(a,b), midX: m.x, midY: m.y, scale: view.scale, tx: view.tx, ty: view.ty };
-    }
-  }, { passive:false });
-
-  mapWrap?.addEventListener("touchmove", (e) => {
-    e.preventDefault();
-
-    if(touchMode === "pan" && e.touches.length === 1 && tLast){
-      const x = e.touches[0].clientX;
-      const y = e.touches[0].clientY;
-      view.tx += (x - tLast.x);
-      view.ty += (y - tLast.y);
-      tLast = { x, y };
-      applyView();
-      return;
-    }
-
-    if(touchMode === "pinch" && e.touches.length === 2 && pinchLast){
-      const a = { x:e.touches[0].clientX, y:e.touches[0].clientY };
-      const b = { x:e.touches[1].clientX, y:e.touches[1].clientY };
-      const d = dist(a,b);
-
-      const rect = mapWrap.getBoundingClientRect();
-      const m = mid(a,b);
-      const px = m.x - rect.left;
-      const py = m.y - rect.top;
-
-      const newScale = clamp(pinchLast.scale * (d / pinchLast.dist), 0.6, 4.0);
-
-      view.tx = px - (px - pinchLast.tx) * (newScale / pinchLast.scale);
-      view.ty = py - (py - pinchLast.ty) * (newScale / pinchLast.scale);
-      view.scale = newScale;
-
-      applyView();
-      return;
-    }
-  }, { passive:false });
-
-  mapWrap?.addEventListener("touchend", () => {
-    tLast = null;
-    pinchLast = null;
-    touchMode = "none";
-    saveView();
-  });
-
-  // =========================
-  // 點地圖：預覽 + 設定座標（會考慮縮放/拖曳）
-  // =========================
-  mapWrap?.addEventListener("click", async (e) => {
-    const elyos = state.channels.find(c => c.name === "天族");
-    if(!elyos) return;
-
-    const rect = mapWrap.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-
-    // 反推回未縮放/未平移座標（0~1）
-    const x = (px - view.tx) / (rect.width  * view.scale);
-    const y = (py - view.ty) / (rect.height * view.scale);
-
-    const x01 = clamp(x, 0, 1);
-    const y01 = clamp(y, 0, 1);
-
-    // 預覽十字
-    mapPickPreview = { x:x01, y:y01 };
-    renderMapMarkers();
-
-    if(!mapPickBossId){
-      if(mapPickHint){
-        mapPickHint.style.display = "block";
-        mapPickHint.textContent = "先在某隻天族 BOSS 按「📍設座標」，再點地圖。";
-      }
-      return;
-    }
-
-    const found = getBossById(mapPickBossId);
-    if(!found){
-      cancelMapPickMode();
-      alert("找不到要設定的 BOSS（可能已被刪除）。");
-      return;
-    }
-
-    found.b.map = { mapId:"elyos_main", x:x01, y:y01 };
-    found.b.notified = false;
-
-    const x100 = Math.round(x01 * 100);
-    const y100 = Math.round(y01 * 100);
-
-    saveLocal(state);
-    render();
-    await pushToCloud();
-
-    alert(`已設定座標：${found.b.name}\nX=${x100}, Y=${y100}`);
-
-    cancelMapPickMode();
-  });
-
-  // =========================
   // init
-  // =========================
   roleLabel.textContent = "—";
   joinIndexLabel.textContent = "—";
   onlineLabel.textContent = "0";
