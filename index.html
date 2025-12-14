@@ -310,8 +310,8 @@
         </div>
 
         <div class="hint">
-          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
-          BOSS 刷新時會進入右側的 <b>「最近重生」</b>；刷新後 <b>15 秒</b> 會自動開始下一輪倒數，但仍保留在最近重生，直到 <b>5 分鐘</b> 後自動忽略移出列表（或你按「擊殺/忽略」立刻移除）。
+          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（073015/7:30:15 皆可，會自動變 07:30:15；日期固定今天）。<br>
+          BOSS 刷新時會進入右側的 <b>「最近重生」</b>；刷新後 <b>15 秒</b> 會自動開始下一輪倒數，但仍保留在最近重生，直到 <b>10 分鐘</b> 後自動忽略移出列表（或你按「擊殺/忽略」立刻移除）。
         </div>
 
         <div class="list" id="bossList"></div>
@@ -367,14 +367,14 @@
     </div>
     <div class="modalBody">
       <div class="hint" style="margin-top:0">
-        請輸入 <b>0730</b> 或 <b>7:30</b>，會自動轉成 <b>07:30</b>。日期固定今天，秒固定 00。
+        請輸入 <b>073015</b> 或 <b>7:30:15</b>，會自動轉成 <b>07:30:15</b>。日期固定今天。
       </div>
 
       <div class="modalRow" style="margin-top:12px">
-        <span class="chip">時間（HHMM 或 HH:MM）
+        <span class="chip">時間（HHMMSS 或 HH:MM:SS）
           <input id="tp_time" type="text" inputmode="numeric"
-                 placeholder="例如 0730 或 7:30"
-                 style="width:160px">
+                 placeholder="例如 073015 或 7:30:15"
+                 style="width:200px">
         </span>
         <button class="btn" id="tp_now" title="快速填入目前時間">現在</button>
       </div>
@@ -414,7 +414,7 @@
 </div>
 
 <script type="module">
-  // 修正 1 & 2：統一使用 v10 模組化 SDK
+  // 統一使用 v10 模組化 SDK
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
   import {
     getFirestore,
@@ -424,7 +424,7 @@
     runTransaction
   } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
 
-  // 新增 Realtime Database 模組用於 Presence
+  // Realtime Database 模組用於 Presence
   import { 
     getDatabase, 
     ref as dbRef, 
@@ -435,7 +435,6 @@
   } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js';
 
   // ✅ 你的 Firebase config
-  // 注意：請確保您的 Firestore Security Rules 允許讀寫
   const firebaseConfig = {
     apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
     authDomain: "aion-2-timer.firebaseapp.com",
@@ -508,7 +507,7 @@
         ["血戰士蘭那爾",180,90,"聖所監視哨所",""],
         ["掠食者加爾桑",240,120,"瑪斯蘭森林",""],
         ["欺瞞者特里德",240,120,"烏瑪通海姆",""],
-        ["藍色水波凱爾皮那",240,120,"淨化之森",""],
+        ["藍色水波凱爾पी那",240,120,"淨化之森",""],
         ["參謀官勒沙納",360,180,"淨化之森",""],
         ["沉默塔爾坦",720,360,"淨化之森",""],
         ["總監督官努塔",240,120,"德拉那兒園斷",""],
@@ -643,12 +642,12 @@
   // presence / heartbeat
   let unsubPresence = null;
   
-  // 修正 3：使用 Realtime DB 實現 Presence
+  // 使用 Realtime DB 實現 Presence
   async function startPresence(){
     // 1. 在 RTDB 寫入 Presence 文件
     await dbSet(presenceRef(), {
       clientId,
-      // 使用 RTDB 的 serverTimestamp
+      // 使用當前時間戳
       joinedAt: Date.now(), 
       lastSeen: Date.now() 
     });
@@ -734,7 +733,6 @@
       if(!firstSnapshotArrived){
         firstSnapshotArrived = true;
         setLocked(false);
-        // ❌ 修正：移除多餘的 history.replaceState (已移到 joinBtn.onclick)
       }
 
       // 更新房主顯示（若 meta.hostId 存在）
@@ -910,6 +908,7 @@
   };
   const fmtTime = (ts) => {
     const d = new Date(ts);
+    // 修正：現在 time 輸出也包含秒
     return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
   };
   const fmtDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -948,7 +947,7 @@
   // =========================
   function getRecentRespawns(){
     const items = [];
-    const TTL_MS = 5 * 60 * 1000; // 5 分鐘後自動忽略
+    const TTL_MS = 10 * 60 * 1000; // ✅ 修正：最近重生保留 10 分鐘
     const t = now();
 
     for(const ch of state.channels){
@@ -1054,7 +1053,7 @@
   }
 
   // =========================
-  // 手動時間輸入（今天）：單欄「時間」
+  // 手動時間輸入 Modal（只留一欄：時間）
   // =========================
   const timeMask = $("#timeMask");
   const tpTime = $("#tp_time");
@@ -1065,15 +1064,60 @@
 
   let timePickerResolve = null;
 
+  /**
+   * 格式化時間輸入：HHMMSS -> HH:MM:SS
+   */
+  function formatTimeInput(input) {
+    // 只保留數字和冒號，並移除連續的冒號
+    let value = input.value.replace(/[^0-9:]/g, '').replace(/:{2,}/g, ':');
+    const parts = value.split(':').map(p => p.trim()).filter(p => p.length > 0);
+    
+    // 如果是純數字輸入，進行格式化
+    if (parts.length === 0 && /^\d*$/.test(input.value)) {
+      value = input.value.replace(/[^0-9]/g, '');
+      if (value.length > 6) value = value.substring(0, 6);
+      
+      let formatted = '';
+      if (value.length > 2) formatted += value.substring(0, 2) + ':';
+      else formatted += value.substring(0, 2);
+
+      if (value.length > 4) formatted += value.substring(2, 4) + ':';
+      else formatted += value.substring(2, 4);
+
+      formatted += value.substring(4);
+      value = formatted;
+    } else if (parts.length > 3) {
+      // 避免過多冒號分段
+      value = parts.slice(0, 3).join(':');
+    }
+    
+    // 儲存光標位置
+    const originalValue = input.value;
+    const selectionStart = input.selectionStart;
+
+    input.value = value;
+    
+    // 恢復光標位置 (針對非純數字輸入時，光標位置可能因自動格式化而移動)
+    if (originalValue.length === value.length) {
+      input.setSelectionRange(selectionStart, selectionStart);
+    } else if (selectionStart === originalValue.length) {
+      // 如果光標在末尾，則保持在末尾
+      input.setSelectionRange(value.length, value.length);
+    }
+  }
+
+
   function openTimePicker(defaultTs){
     const base = defaultTs ? new Date(defaultTs) : new Date();
     const h = String(base.getHours()).padStart(2, "0");
     const m = String(base.getMinutes()).padStart(2, "0");
+    const s = String(base.getSeconds()).padStart(2, "0");
 
     const today = new Date();
     timeDateBadge.textContent = fmtDate(today);
 
-    tpTime.value = `${h}${m}`;
+    // 預設填入 HH:MM:SS 格式
+    tpTime.value = `${h}:${m}:${s}`;
     tpTime.focus();
 
     timeMask.style.display = "flex";
@@ -1102,38 +1146,55 @@
 
   tpNow.onclick = () => {
     const d = new Date();
-    tpTime.value = `${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
+    tpTime.value = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+    tpTime.dispatchEvent(new Event('input')); // 觸發一次格式化
   };
 
+  tpTime.addEventListener("input", (e) => {
+    // 增加即時格式化功能 (HHMMSS -> HH:MM:SS)
+    formatTimeInput(e.target);
+  });
+  
   tpOK.onclick = () => {
     let raw = (tpTime.value || "").trim();
-    if(!raw){ alert("請輸入時間，例如 0730 或 7:30"); tpTime.focus(); return; }
+    if(!raw){ alert("請輸入時間，例如 073015 或 7:30:15"); tpTime.focus(); return; }
 
-    let h, m;
+    let h, m, s;
+    const parts = raw.split(':');
 
-    if (/^\d{1,2}:\d{2}$/.test(raw)) {
-      const [hh, mm] = raw.split(":");
-      h = Number(hh); m = Number(mm);
-    } else if (/^\d{3,4}$/.test(raw)) {
-      const s = raw.padStart(4, "0");
-      h = Number(s.slice(0, 2));
-      m = Number(s.slice(2, 4));
+    if (parts.length === 3) {
+      // 格式: H:M:S
+      h = Number(parts[0]);
+      m = Number(parts[1]);
+      s = Number(parts[2]);
+    } else if (parts.length === 2) {
+      // 格式: H:M (秒數預設為 0)
+      h = Number(parts[0]);
+      m = Number(parts[1]);
+      s = 0;
+    } else if (/^\d{3,6}$/.test(raw.replace(/:/g, ''))) {
+      // 格式: HHMMSS (純數字，長度 3~6)
+      const cleaned = raw.replace(/:/g, '').padStart(6, '0');
+      h = Number(cleaned.slice(0, 2));
+      m = Number(cleaned.slice(2, 4));
+      s = Number(cleaned.slice(4, 6));
     } else {
-      alert("時間格式錯誤，請用 0730 或 7:30");
+      alert("時間格式錯誤，請用 HHMMSS 或 HH:MM:SS");
       tpTime.focus();
       return;
     }
 
-    if(h < 0 || h > 23 || m < 0 || m > 59){
-      alert("時間超出範圍（00:00 ～ 23:59）");
+    if(h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59){
+      alert("時間超出範圍（00:00:00 ～ 23:59:59）");
       tpTime.focus();
       return;
     }
 
-    tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    // 更新輸入框顯示為標準格式
+    tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
 
     const d = new Date();
-    d.setHours(h, m, 0, 0);
+    d.setHours(h, m, s, 0); // 設定時、分、秒，毫秒固定為 0
     const ts = d.getTime();
 
     if(timePickerResolve) timePickerResolve(ts);
@@ -1147,7 +1208,7 @@
       closeTimePicker();
     }
   });
-
+  
   // =========================
   // 備份：匯出 / 匯入 + 摘要
   // =========================
@@ -1556,14 +1617,14 @@
   };
 
   // =========================
-  // 提醒 + 最近重生：刷新後 15 秒自動開始倒數，但仍保留最近重生直到 5 分鐘自動忽略
+  // 提醒 + 最近重生：刷新後 15 秒自動開始倒數，但仍保留最近重生直到 10 分鐘自動忽略
   // =========================
   function checkAlerts(){
     const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
     const notifyMs = notifyBeforeMin * 60 * 1000;
 
     const AUTO_START_MS = 15 * 1000;      // ✅ 刷新後 15 秒自動開始下一輪倒數
-    const AUTO_IGNORE_MS = 5 * 60 * 1000; // ✅ 最近重生保留 5 分鐘後自動忽略
+    const AUTO_IGNORE_MS = 10 * 60 * 1000; // ✅ 修正：最近重生保留 10 分鐘後自動忽略
 
     let changed = false;
     const t = now();
@@ -1601,7 +1662,7 @@
             }
           }
 
-          // ✅ 超過 5 分鐘：自動忽略移出最近重生
+          // ✅ 超過 10 分鐘：自動忽略移出最近重生
           if(b._recentShownAt && (t - b._recentShownAt >= AUTO_IGNORE_MS)){
             b._recentIgnored = true;
             delete b._recentShownAt;
@@ -1653,7 +1714,7 @@
       startRoomListen();
       await startPresence();
 
-      // ✅ 修正 4：只在這裡更新 URL，確保連結正確且不干擾歷史紀錄
+      // 只在這裡更新 URL
       const u = new URL(location.href);
       u.searchParams.set("room", roomId);
       history.replaceState(null, "", u.toString());
