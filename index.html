@@ -321,7 +321,6 @@
     <div class="card">
       <div class="body">
 
-        <!-- 🟠 最近重生（含篩選） -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <b>🟠 最近重生</b>
 
@@ -346,7 +345,6 @@
 
         <div class="hr" style="margin:14px 0;"></div>
 
-        <!-- ⭐ 收藏 -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <b>⭐ 收藏</b>
           <span class="badge" id="favCount">0</span>
@@ -361,7 +359,6 @@
   </div>
 </div>
 
-<!-- 手動時間輸入 Modal（只留一欄：時間） -->
 <div class="modalMask" id="timeMask" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
     <div class="modalHead">
@@ -389,7 +386,6 @@
   </div>
 </div>
 
-<!-- 匯入備份摘要 Modal -->
 <div class="modalMask" id="backupMask" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
     <div class="modalHead">
@@ -418,19 +414,32 @@
 </div>
 
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
+  // 修正 1 & 2：統一使用 v10 模組化 SDK
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
   import {
     getFirestore,
     doc, setDoc, onSnapshot,
     serverTimestamp,
     collection,
     runTransaction
-  } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
+  } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
+
+  // 新增 Realtime Database 模組用於 Presence
+  import { 
+    getDatabase, 
+    ref as dbRef, 
+    set as dbSet, 
+    onValue, 
+    onDisconnect, 
+    remove as dbRemove
+  } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js';
 
   // ✅ 你的 Firebase config
+  // 注意：請確保您的 Firestore Security Rules 允許讀寫
   const firebaseConfig = {
     apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
     authDomain: "aion-2-timer.firebaseapp.com",
+    databaseURL: "https://aion-2-timer-default-rtdb.firebaseio.com", // RTDB URL for presence
     projectId: "aion-2-timer",
     storageBucket: "aion-2-timer.firebasestorage.app",
     messagingSenderId: "385544715160",
@@ -440,6 +449,7 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const rtdb = getDatabase(app); // 初始化 Realtime Database
 
   // =========================
   // Client ID（房主、加入序、線上狀態）
@@ -470,19 +480,19 @@
         ["腐朽的庫塔爾",60,30,"艾雷倫河沼澤",""],
         ["盛開的柯林",120,60,"艾雷倫河中游",""],
         ["護衛兵堤甘特",180,90,"要塞廢墟",""],
-        ["狂鬥士庫森",240,120,"要塞廢墟",""],
+        ["狂鬥士庫桑",240,120,"要塞廢墟",""],
         ["祭司長加爾新",240,120,"要塞廢墟",""],
-        ["血獠牙普寧",360,180,"托爾巴斯森林",""],
-        ["憤怒的薩呂",360,180,"托爾巴斯森林",""],
-        ["學者拉兀拉",240,120,"阿爾拉島部落",""],
-        ["追擊者塔兀羅",240,120,"阿爾拉島部落",""],
+        ["血獠牙普寧",360,180,"要塞廢墟",""],
+        ["憤怒的薩呂",360,180,"要塞廢墟",""],
+        ["學者拉烏拉",240,120,"托爾巴斯森林",""],
+        ["追擊者塔烏羅",240,120,"阿爾拉島部落",""],
         ["森林戰士烏刺姆",480,240,"阿爾拉島部落",""],
-        ["黑色觸手拉瓦",480,240,"阿爾塔米亞峽谷",""],
-        ["叛教者雷拉",360,180,"阿爾塔米亞高原",""],
+        ["黑色觸手拉瓦",480,240,"阿爾拉島部落",""],
+        ["叛教者雷西拉",360,180,"阿爾塔米亞峽谷",""],
         ["百夫長戴米羅斯",480,240,"阿爾塔米亞高原",""],
         ["神聖的安薩斯",720,360,"阿爾塔米亞高原",""],
         ["收穫管理者莫夏夫",360,180,"德拉那栽培地",""],
-        ["監視兵器克納許",480,240,"德拉那栽培地",""],
+        ["監視兵器克納許",480,240,"納希德軍團要塞",""],
         ["研究官塞特蘭",720,360,"納希德軍團要塞",""],
         ["幻夢卡西亞",720,360,"幻影神庭院",""],
         ["沉默塔爾坦",720,360,"阿爾塔米亞高原南部",""],
@@ -595,15 +605,17 @@
   saveLocal(state);
 
   // =========================
-  // Firestore：房間同步 + presence
+  // Firestore：房間同步 + Realtime DB：Presence
   // =========================
   let roomId = "";
   let unsubRoom = null;
 
+  // Firestore Docs
   const roomDocRef = () => doc(db, "rooms", roomId);
-  const presenceColRef = () => collection(db, "rooms", roomId, "presence");
-  const presenceDocRef = () => doc(db, "rooms", roomId, "presence", clientId);
-
+  // Realtime DB Refs for Presence
+  const presenceRef = () => dbRef(rtdb, "rooms_presence/" + roomId + "/online_users/" + clientId);
+  const usersRef = () => dbRef(rtdb, "rooms_presence/" + roomId + "/online_users");
+  
   // UI：身分/加入序/線上數
   const roleLabel = document.querySelector("#roleLabel");
   const joinIndexLabel = document.querySelector("#joinIndexLabel");
@@ -630,41 +642,38 @@
 
   // presence / heartbeat
   let unsubPresence = null;
-  let presenceTimer = null;
-
+  
+  // 修正 3：使用 Realtime DB 實現 Presence
   async function startPresence(){
-    await setDoc(presenceDocRef(), {
+    // 1. 在 RTDB 寫入 Presence 文件
+    await dbSet(presenceRef(), {
       clientId,
-      lastSeen: serverTimestamp(),
-      joinedAt: serverTimestamp()
-    }, { merge: true });
+      // 使用 RTDB 的 serverTimestamp
+      joinedAt: Date.now(), 
+      lastSeen: Date.now() 
+    });
+    
+    // 2. 設定斷線時（瀏覽器關閉/網路斷開）自動將此文件移除
+    onDisconnect(presenceRef()).remove();
 
-    if(presenceTimer) clearInterval(presenceTimer);
-    presenceTimer = setInterval(async () => {
-      try{
-        await setDoc(presenceDocRef(), { lastSeen: serverTimestamp() }, { merge: true });
-      }catch(_e){}
-    }, 10000);
-
+    // 3. 監聽線上使用者計數
     if(unsubPresence) unsubPresence();
-    unsubPresence = onSnapshot(presenceColRef(), (snap) => {
-      const nowMs = Date.now();
-      let alive = 0;
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
-        const ts = d?.lastSeen?.toMillis ? d.lastSeen.toMillis() : 0;
-        if(ts && (nowMs - ts) <= 25000) alive++;
-      });
+    
+    unsubPresence = onValue(usersRef(), (snapshot) => {
+      const users = snapshot.val();
+      const alive = users ? Object.keys(users).length : 0;
       onlineLabel.textContent = String(alive);
     }, (err) => {
-      console.warn("presence 監聽失敗：", err);
+      console.warn("RTDB Presence 監聽失敗：", err);
       onlineLabel.textContent = "0";
     });
   }
 
   function stopPresence(){
     if(unsubPresence){ unsubPresence(); unsubPresence = null; }
-    if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
+    // 確保離開房間時清除 onDisconnect 處理，並立即移除自己的 presence 紀錄
+    onDisconnect(presenceRef()).cancel();
+    dbRemove(presenceRef());
   }
 
   // ✅ Transaction：建立房間 meta（hostId/joinSeq）並返回加入序
@@ -725,6 +734,7 @@
       if(!firstSnapshotArrived){
         firstSnapshotArrived = true;
         setLocked(false);
+        // ❌ 修正：移除多餘的 history.replaceState (已移到 joinBtn.onclick)
       }
 
       // 更新房主顯示（若 meta.hostId 存在）
@@ -1633,7 +1643,7 @@
 
     roomId = r;
 
-    setLocked(true, "同步中，操作已暫時鎖定…");
+    setLocked(true, "正在連線/建立房間…");
     setCloudStatus("正在連線房間…", null);
 
     try{
@@ -1643,6 +1653,7 @@
       startRoomListen();
       await startPresence();
 
+      // ✅ 修正 4：只在這裡更新 URL，確保連結正確且不干擾歷史紀錄
       const u = new URL(location.href);
       u.searchParams.set("room", roomId);
       history.replaceState(null, "", u.toString());
@@ -1650,7 +1661,7 @@
       render();
     }catch(e){
       console.error(e);
-      setCloudStatus("加入失敗（看 Console/Rules）", false);
+      setCloudStatus("加入失敗（請檢查 Firebase Rules/Console）", false);
       setLocked(false);
     }
   };
@@ -1674,9 +1685,10 @@
   if(urlRoom) roomInput.value = urlRoom;
 
   render();
+  // 每秒更新 UI 和檢查提醒
   setInterval(() => { checkAlerts(); render(); }, 1000);
 
-  // 解鎖音效（瀏覽器規定）
+  // 解鎖音效（瀏覽器規定：需使用者互動）
   window.addEventListener("pointerdown", () => {
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
   }, { once: false });
