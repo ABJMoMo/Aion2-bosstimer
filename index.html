@@ -21,13 +21,27 @@
         var(--bg);
       color:var(--text); font-family:var(--sans);
     }
-    .wrap{max-width:1180px;margin:24px auto;padding:0 16px 40px}
+
+    /* ✅ topbar 改 fixed 後，需要補上 wrap 的 padding-top（避免被蓋住） */
+    .wrap{max-width:1180px;margin:24px auto;padding:140px 16px 40px}
+
+    /* ✅ 最上方設定列固定不隨滾輪移動 */
     .topbar{
       display:flex; gap:12px; align-items:flex-start; justify-content:space-between;
-      padding:16px; background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
-      border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);
-      position:static; top:auto; z-index:10; backdrop-filter: blur(10px);
+      padding:16px;
+
+      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
+      border-bottom:1px solid var(--line);
+      box-shadow:var(--shadow);
+
+      position:fixed;
+      top:0; left:0; right:0;
+      z-index:1000;
+      backdrop-filter: blur(10px);
+
+      border-radius:0;
     }
+
     .title{display:flex; flex-direction:column; gap:6px; min-width:260px}
     .title h1{margin:0; font-size:18px; letter-spacing:.2px}
     .title .sub{color:var(--muted); font-size:12px; line-height:1.35}
@@ -42,7 +56,10 @@
     .btn.primary{border-color:rgba(122,167,255,.35)} .btn.primary:hover{border-color:rgba(122,167,255,.70)}
     .btn.good{border-color:rgba(73,209,125,.35)} .btn.good:hover{border-color:rgba(73,209,125,.70)}
     .grid{display:grid; grid-template-columns: 1.25fr .75fr; gap:14px; margin-top:14px;}
-    @media (max-width: 980px){ .grid{grid-template-columns:1fr} .topbar{position:relative; top:0} }
+    @media (max-width: 980px){
+      .grid{grid-template-columns:1fr}
+    }
+
     .card{
       background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
       border:1px solid var(--line); border-radius:var(--radius);
@@ -180,7 +197,7 @@
       <h1>AION 2｜BOSS 倒數計時器（多人共用）</h1>
       <div class="sub">
         同一個 Room ID 的人會同步看到同一份倒數資料（擊殺/編輯/新增會即時同步）。<br>
-        ※ 「字體/只看收藏/提示音選單」為本機偏好，不會同步到房間。
+        ※ 「字體/只看收藏/提示音選單/最近重生篩選」為本機偏好，不會同步到房間。
       </div>
 
       <div class="roombar" style="margin-top:8px">
@@ -304,10 +321,26 @@
     <div class="card">
       <div class="body">
 
-        <!-- 🟠 最近重生 -->
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <!-- 🟠 最近重生（含篩選） -->
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <b>🟠 最近重生</b>
-          <span class="badge" id="recentCount">0</span>
+
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="chip" style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 10px">
+              <input type="checkbox" id="recentChkEly" checked />
+              天族
+            </label>
+            <label class="chip" style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 10px">
+              <input type="checkbox" id="recentChkAsmo" checked />
+              魔族
+            </label>
+            <label class="chip" style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 10px">
+              <input type="checkbox" id="recentChkAbyss" checked />
+              深淵
+            </label>
+
+            <span class="badge" id="recentCount">0</span>
+          </div>
         </div>
         <div id="recentBox"></div>
 
@@ -321,7 +354,7 @@
         <div id="favBox"></div>
 
         <div class="hint" style="margin-top:14px">
-          ※ 字體大小 / 只看收藏 / 提示音選單為本機偏好，不會同步到房間。
+          ※ 字體大小 / 只看收藏 / 提示音選單 / 最近重生篩選 為本機偏好，不會同步到房間。
         </div>
       </div>
     </div>
@@ -522,7 +555,15 @@
   const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v8";
   const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
   const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
-  let uiPref = loadUI() || { font: "md", onlyFav: false, soundWarn: "sharp", soundSpawn: "double" };
+
+  let uiPref = loadUI() || {
+    font: "md",
+    onlyFav: false,
+    soundWarn: "sharp",
+    soundSpawn: "double",
+    recentFilter: { ely: true, asmo: true, abyss: true } // ✅ 最近重生篩選
+  };
+  uiPref.recentFilter ||= { ely: true, asmo: true, abyss: true };
 
   let state = loadLocal() || defaultState();
 
@@ -737,9 +778,36 @@
   const selSoundWarn = $("#selSoundWarn");
   const selSoundSpawn = $("#selSoundSpawn");
 
+  // ✅ 最近重生篩選（本機偏好）
+  const recentChkEly = $("#recentChkEly");
+  const recentChkAsmo = $("#recentChkAsmo");
+  const recentChkAbyss = $("#recentChkAbyss");
+
   const btnExport = $("#btnExport");
   const btnImport = $("#btnImport");
   const fileImport = $("#fileImport");
+
+  function applyRecentFilterToUI(){
+    recentChkEly.checked = !!uiPref.recentFilter.ely;
+    recentChkAsmo.checked = !!uiPref.recentFilter.asmo;
+    recentChkAbyss.checked = !!uiPref.recentFilter.abyss;
+  }
+
+  recentChkEly.onchange = () => {
+    uiPref.recentFilter.ely = recentChkEly.checked;
+    saveUI(uiPref);
+    render();
+  };
+  recentChkAsmo.onchange = () => {
+    uiPref.recentFilter.asmo = recentChkAsmo.checked;
+    saveUI(uiPref);
+    render();
+  };
+  recentChkAbyss.onchange = () => {
+    uiPref.recentFilter.abyss = recentChkAbyss.checked;
+    saveUI(uiPref);
+    render();
+  };
 
   // ===== 提示音（選單 + 不同狀態）=====
   let audioCtx = null;
@@ -866,7 +934,7 @@
   };
 
   // =========================
-  // 🟠 最近重生：收集/渲染（最多顯示 10 隻）
+  // 🟠 最近重生：收集/渲染（最多顯示 10 隻 + 分類篩選）
   // =========================
   function getRecentRespawns(){
     const items = [];
@@ -874,6 +942,16 @@
     const t = now();
 
     for(const ch of state.channels){
+      const nm = (ch.name || "").trim();
+      const kind =
+        /天族/.test(nm) ? "ely" :
+        /魔族/.test(nm) ? "asmo" :
+        /深淵/.test(nm) ? "abyss" : "other";
+
+      if(kind !== "other" && uiPref?.recentFilter && uiPref.recentFilter[kind] === false){
+        continue; // ✅ 該分類沒勾選就跳過整個分流
+      }
+
       for(const b of (ch.bosses || [])){
         if(b._recentShownAt && !b._recentIgnored){
           if(t - b._recentShownAt <= TTL_MS){
@@ -1207,6 +1285,8 @@
     selSoundWarn.value = uiPref.soundWarn || "sharp";
     selSoundSpawn.value = uiPref.soundSpawn || "double";
 
+    applyRecentFilterToUI();
+
     chkSound.checked = !!state.settings.soundEnabled;
     chkEvent.checked = !!state.settings.eventMode;
     eventLabel.textContent = state.settings.eventMode ? "ON" : "OFF";
@@ -1396,7 +1476,7 @@
   // =========================
   // 控制項
   // =========================
-  $("#btnResetLocal").onclick = () => {
+  document.querySelector("#btnResetLocal").onclick = () => {
     if(!confirm("重置本機資料？（不會刪雲端房間）")) return;
     localStorage.removeItem(LOCAL_KEY);
     state = defaultState();
@@ -1424,7 +1504,7 @@
   selSoundWarn.onchange = () => { uiPref.soundWarn = selSoundWarn.value; saveUI(uiPref); render(); };
   selSoundSpawn.onchange = () => { uiPref.soundSpawn = selSoundSpawn.value; saveUI(uiPref); render(); };
 
-  $("#btnAddBoss").onclick = async () => {
+  document.querySelector("#btnAddBoss").onclick = async () => {
     const name = prompt("BOSS 名稱（繁中）：", "新BOSS");
     if(name === null) return;
     const loc = prompt("出現地區（位置）：", "");
@@ -1456,7 +1536,7 @@
     saveLocal(state); render(); await pushToCloud();
   };
 
-  $("#btnAddChannel").onclick = async () => {
+  document.querySelector("#btnAddChannel").onclick = async () => {
     const name = prompt("分流名稱：", `自訂分流 ${state.channels.length+1}`);
     if(name === null) return;
     const ch = { id: uid("ch"), name: (name.trim() || `自訂分流 ${state.channels.length+1}`), bosses: [] };
@@ -1531,9 +1611,9 @@
   // =========================
   // 房間加入/連結（加入既有房間不覆蓋 + UI lock + 加入序/房主/線上）
   // =========================
-  const roomInput = $("#roomId");
-  const joinBtn = $("#btnJoin");
-  const copyBtn = $("#btnCopyLink");
+  const roomInput = document.querySelector("#roomId");
+  const joinBtn = document.querySelector("#btnJoin");
+  const copyBtn = document.querySelector("#btnCopyLink");
 
   function getRoomFromURL(){
     const u = new URL(location.href);
@@ -1585,9 +1665,9 @@
   };
 
   // init
-  roleLabel.textContent = "—";
-  joinIndexLabel.textContent = "—";
-  onlineLabel.textContent = "0";
+  document.querySelector("#roleLabel").textContent = "—";
+  document.querySelector("#joinIndexLabel").textContent = "—";
+  document.querySelector("#onlineLabel").textContent = "0";
   setCloudStatus("未連線", false);
 
   const urlRoom = getRoomFromURL();
