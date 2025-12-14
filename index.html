@@ -589,6 +589,7 @@
         // ✅ 最近重生欄位
         // _recentShownAt: number
         // _recentIgnored: boolean
+        // _autoRespawned: boolean // <-- 修正：新增自動重置旗標
       }
     }
     if(!s.settings) s.settings = { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false };
@@ -1027,9 +1028,10 @@
           b.lastKillAt = now();
           b.notified = false;
 
-          // ✅ 點擊殺：代表已處理，移出最近重生
+          // ✅ 點擊殺：代表已處理，移出最近重生，清除自動重置旗標
           delete b._recentShownAt;
           delete b._recentIgnored;
+          delete b._autoRespawned; // <-- 修正：清除旗標
 
           saveLocal(state);
           render();
@@ -1040,6 +1042,7 @@
           // ✅ 忽略：立刻移出最近重生
           b._recentIgnored = true;
           delete b._recentShownAt;
+          delete b._autoRespawned; // <-- 修正：清除旗標
 
           saveLocal(state);
           render();
@@ -1485,9 +1488,10 @@
         b.lastKillAt = now();
         b.notified = false;
 
-        // ✅ 點擊殺：代表已處理，移出最近重生
+        // ✅ 點擊殺：代表已處理，移出最近重生，清除自動重置旗標
         delete b._recentShownAt;
         delete b._recentIgnored;
+        delete b._autoRespawned; // <-- 修正：清除旗標
 
         saveLocal(state); render(); await pushToCloud();
       }),
@@ -1497,9 +1501,10 @@
         b.lastKillAt = ts;
         b.notified = false;
 
-        // 手動設定也視為已處理 → 移出最近重生
+        // 手動設定也視為已處理 → 移出最近重生，清除自動重置旗標
         delete b._recentShownAt;
         delete b._recentIgnored;
+        delete b._autoRespawned; // <-- 修正：清除旗標
 
         saveLocal(state); render(); await pushToCloud();
       }),
@@ -1530,6 +1535,7 @@
         // 編輯後移出最近重生
         delete b._recentShownAt;
         delete b._recentIgnored;
+        delete b._autoRespawned; // <-- 修正：清除旗標
 
         saveLocal(state); render(); await pushToCloud();
       }),
@@ -1648,24 +1654,24 @@
           // ✅ 刷新瞬間：加入「最近重生」（只做一次）
           if(!b._recentShownAt && !b._recentIgnored){
             b._recentShownAt = t;
+            b._autoRespawned = false; // 確保刷新時重置自動重置旗標
             beep("spawn");
             changed = true;
           }
 
-          // ✅ 超過 15 秒：自動開始下一輪倒數（但不移出最近重生）
-          if(b._recentShownAt && (t - b._recentShownAt >= AUTO_START_MS)){
-            // 避免每秒一直重置：只做一次（lastKillAt 推到近現在）
-            if(Math.abs((b.lastKillAt ?? 0) - t) > 2000){
-              b.lastKillAt = t;
-              b.notified = false;
-              changed = true;
-            }
+          // ✅ 修正：超過 15 秒，自動開始下一輪倒數（使用旗標防止重複執行）
+          if(b._recentShownAt && !b._autoRespawned && (t - b._recentShownAt >= AUTO_START_MS)){
+            b.lastKillAt = t;
+            b.notified = false;
+            b._autoRespawned = true; // 標記為已自動重置
+            changed = true;
           }
 
           // ✅ 超過 10 分鐘：自動忽略移出最近重生
           if(b._recentShownAt && (t - b._recentShownAt >= AUTO_IGNORE_MS)){
             b._recentIgnored = true;
             delete b._recentShownAt;
+            delete b._autoRespawned; // 清除旗標
             changed = true;
           }
         }
