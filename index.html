@@ -23,7 +23,7 @@
     }
 
     /* ✅ topbar 改 fixed 後，需要補上 wrap 的 padding-top（避免被蓋住） */
-    .wrap{max-width:1180px;margin:24px auto;padding:160px 16px 40px}
+    .wrap{max-width:1180px;margin:24px auto;padding:140px 16px 40px}
 
     /* ✅ 最上方設定列固定不隨滾輪移動 */
     .topbar{
@@ -310,8 +310,8 @@
         </div>
 
         <div class="hint">
-          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（073015/7:30:15 皆可，會自動變 07:30:15；日期固定今天）。<br>
-          BOSS 刷新時會進入右側的 <b>「最近重生」</b>；刷新後 <b>15 秒</b> 會自動開始下一輪倒數，但仍保留在最近重生，直到 <b>10 分鐘</b> 後自動忽略移出列表（或你按「擊殺/忽略」立刻移除）。
+          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
+          BOSS 刷新時會進入右側的 <b>「最近重生」</b>；刷新後 <b>15 秒</b> 會自動開始下一輪倒數，但仍保留在最近重生，直到 <b>5 分鐘</b> 後自動忽略移出列表（或你按「擊殺/忽略」立刻移除）。
         </div>
 
         <div class="list" id="bossList"></div>
@@ -321,6 +321,7 @@
     <div class="card">
       <div class="body">
 
+        <!-- 🟠 最近重生（含篩選） -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <b>🟠 最近重生</b>
 
@@ -345,6 +346,7 @@
 
         <div class="hr" style="margin:14px 0;"></div>
 
+        <!-- ⭐ 收藏 -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <b>⭐ 收藏</b>
           <span class="badge" id="favCount">0</span>
@@ -359,6 +361,7 @@
   </div>
 </div>
 
+<!-- 手動時間輸入 Modal（只留一欄：時間） -->
 <div class="modalMask" id="timeMask" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
     <div class="modalHead">
@@ -367,14 +370,14 @@
     </div>
     <div class="modalBody">
       <div class="hint" style="margin-top:0">
-        請輸入 <b>073015</b> 或 <b>7:30:15</b>，會自動轉成 <b>07:30:15</b>。日期固定今天。
+        請輸入 <b>0730</b> 或 <b>7:30</b>，會自動轉成 <b>07:30</b>。日期固定今天，秒固定 00。
       </div>
 
       <div class="modalRow" style="margin-top:12px">
-        <span class="chip">時間（HHMMSS 或 HH:MM:SS）
+        <span class="chip">時間（HHMM 或 HH:MM）
           <input id="tp_time" type="text" inputmode="numeric"
-                 placeholder="例如 073015 或 7:30:15"
-                 style="width:200px">
+                 placeholder="例如 0730 或 7:30"
+                 style="width:160px">
         </span>
         <button class="btn" id="tp_now" title="快速填入目前時間">現在</button>
       </div>
@@ -386,6 +389,7 @@
   </div>
 </div>
 
+<!-- 匯入備份摘要 Modal -->
 <div class="modalMask" id="backupMask" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
     <div class="modalHead">
@@ -414,31 +418,19 @@
 </div>
 
 <script type="module">
-  // 統一使用 v10 模組化 SDK
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
   import {
     getFirestore,
     doc, setDoc, onSnapshot,
     serverTimestamp,
     collection,
     runTransaction
-  } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
-
-  // Realtime Database 模組用於 Presence
-  import { 
-    getDatabase, 
-    ref as dbRef, 
-    set as dbSet, 
-    onValue, 
-    onDisconnect, 
-    remove as dbRemove
-  } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js';
+  } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
 
   // ✅ 你的 Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
     authDomain: "aion-2-timer.firebaseapp.com",
-    databaseURL: "https://aion-2-timer-default-rtdb.firebaseio.com", // RTDB URL for presence
     projectId: "aion-2-timer",
     storageBucket: "aion-2-timer.firebasestorage.app",
     messagingSenderId: "385544715160",
@@ -448,7 +440,6 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const rtdb = getDatabase(app); // 初始化 Realtime Database
 
   // =========================
   // Client ID（房主、加入序、線上狀態）
@@ -507,7 +498,7 @@
         ["血戰士蘭那爾",180,90,"聖所監視哨所",""],
         ["掠食者加爾桑",240,120,"瑪斯蘭森林",""],
         ["欺瞞者特里德",240,120,"烏瑪通海姆",""],
-        ["藍色水波凱爾पी那",240,120,"淨化之森",""],
+        ["藍色水波凱爾皮那",240,120,"淨化之森",""],
         ["參謀官勒沙納",360,180,"淨化之森",""],
         ["沉默塔爾坦",720,360,"淨化之森",""],
         ["總監督官努塔",240,120,"德拉那兒園斷",""],
@@ -589,7 +580,6 @@
         // ✅ 最近重生欄位
         // _recentShownAt: number
         // _recentIgnored: boolean
-        // _autoRespawned: boolean // <-- 修正：新增自動重置旗標
       }
     }
     if(!s.settings) s.settings = { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false };
@@ -605,17 +595,15 @@
   saveLocal(state);
 
   // =========================
-  // Firestore：房間同步 + Realtime DB：Presence
+  // Firestore：房間同步 + presence
   // =========================
   let roomId = "";
   let unsubRoom = null;
 
-  // Firestore Docs
   const roomDocRef = () => doc(db, "rooms", roomId);
-  // Realtime DB Refs for Presence
-  const presenceRef = () => dbRef(rtdb, "rooms_presence/" + roomId + "/online_users/" + clientId);
-  const usersRef = () => dbRef(rtdb, "rooms_presence/" + roomId + "/online_users");
-  
+  const presenceColRef = () => collection(db, "rooms", roomId, "presence");
+  const presenceDocRef = () => doc(db, "rooms", roomId, "presence", clientId);
+
   // UI：身分/加入序/線上數
   const roleLabel = document.querySelector("#roleLabel");
   const joinIndexLabel = document.querySelector("#joinIndexLabel");
@@ -642,38 +630,41 @@
 
   // presence / heartbeat
   let unsubPresence = null;
-  
-  // 使用 Realtime DB 實現 Presence
-  async function startPresence(){
-    // 1. 在 RTDB 寫入 Presence 文件
-    await dbSet(presenceRef(), {
-      clientId,
-      // 使用當前時間戳
-      joinedAt: Date.now(), 
-      lastSeen: Date.now() 
-    });
-    
-    // 2. 設定斷線時（瀏覽器關閉/網路斷開）自動將此文件移除
-    onDisconnect(presenceRef()).remove();
+  let presenceTimer = null;
 
-    // 3. 監聽線上使用者計數
+  async function startPresence(){
+    await setDoc(presenceDocRef(), {
+      clientId,
+      lastSeen: serverTimestamp(),
+      joinedAt: serverTimestamp()
+    }, { merge: true });
+
+    if(presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = setInterval(async () => {
+      try{
+        await setDoc(presenceDocRef(), { lastSeen: serverTimestamp() }, { merge: true });
+      }catch(_e){}
+    }, 10000);
+
     if(unsubPresence) unsubPresence();
-    
-    unsubPresence = onValue(usersRef(), (snapshot) => {
-      const users = snapshot.val();
-      const alive = users ? Object.keys(users).length : 0;
+    unsubPresence = onSnapshot(presenceColRef(), (snap) => {
+      const nowMs = Date.now();
+      let alive = 0;
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const ts = d?.lastSeen?.toMillis ? d.lastSeen.toMillis() : 0;
+        if(ts && (nowMs - ts) <= 25000) alive++;
+      });
       onlineLabel.textContent = String(alive);
     }, (err) => {
-      console.warn("RTDB Presence 監聽失敗：", err);
+      console.warn("presence 監聽失敗：", err);
       onlineLabel.textContent = "0";
     });
   }
 
   function stopPresence(){
     if(unsubPresence){ unsubPresence(); unsubPresence = null; }
-    // 確保離開房間時清除 onDisconnect 處理，並立即移除自己的 presence 紀錄
-    onDisconnect(presenceRef()).cancel();
-    dbRemove(presenceRef());
+    if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
   }
 
   // ✅ Transaction：建立房間 meta（hostId/joinSeq）並返回加入序
@@ -909,7 +900,6 @@
   };
   const fmtTime = (ts) => {
     const d = new Date(ts);
-    // 修正：現在 time 輸出也包含秒
     return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
   };
   const fmtDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -948,7 +938,7 @@
   // =========================
   function getRecentRespawns(){
     const items = [];
-    const TTL_MS = 10 * 60 * 1000; // ✅ 修正：最近重生保留 10 分鐘
+    const TTL_MS = 5 * 60 * 1000; // 5 分鐘後自動忽略
     const t = now();
 
     for(const ch of state.channels){
@@ -1028,10 +1018,9 @@
           b.lastKillAt = now();
           b.notified = false;
 
-          // ✅ 點擊殺：代表已處理，移出最近重生，清除自動重置旗標
+          // ✅ 點擊殺：代表已處理，移出最近重生
           delete b._recentShownAt;
           delete b._recentIgnored;
-          delete b._autoRespawned; // <-- 修正：清除旗標
 
           saveLocal(state);
           render();
@@ -1042,7 +1031,6 @@
           // ✅ 忽略：立刻移出最近重生
           b._recentIgnored = true;
           delete b._recentShownAt;
-          delete b._autoRespawned; // <-- 修正：清除旗標
 
           saveLocal(state);
           render();
@@ -1056,7 +1044,7 @@
   }
 
   // =========================
-  // 手動時間輸入 Modal（只留一欄：時間）
+  // 手動時間輸入（今天）：單欄「時間」
   // =========================
   const timeMask = $("#timeMask");
   const tpTime = $("#tp_time");
@@ -1067,60 +1055,15 @@
 
   let timePickerResolve = null;
 
-  /**
-   * 格式化時間輸入：HHMMSS -> HH:MM:SS
-   */
-  function formatTimeInput(input) {
-    // 只保留數字和冒號，並移除連續的冒號
-    let value = input.value.replace(/[^0-9:]/g, '').replace(/:{2,}/g, ':');
-    const parts = value.split(':').map(p => p.trim()).filter(p => p.length > 0);
-    
-    // 如果是純數字輸入，進行格式化
-    if (parts.length === 0 && /^\d*$/.test(input.value)) {
-      value = input.value.replace(/[^0-9]/g, '');
-      if (value.length > 6) value = value.substring(0, 6);
-      
-      let formatted = '';
-      if (value.length > 2) formatted += value.substring(0, 2) + ':';
-      else formatted += value.substring(0, 2);
-
-      if (value.length > 4) formatted += value.substring(2, 4) + ':';
-      else formatted += value.substring(2, 4);
-
-      formatted += value.substring(4);
-      value = formatted;
-    } else if (parts.length > 3) {
-      // 避免過多冒號分段
-      value = parts.slice(0, 3).join(':');
-    }
-    
-    // 儲存光標位置
-    const originalValue = input.value;
-    const selectionStart = input.selectionStart;
-
-    input.value = value;
-    
-    // 恢復光標位置 (針對非純數字輸入時，光標位置可能因自動格式化而移動)
-    if (originalValue.length === value.length) {
-      input.setSelectionRange(selectionStart, selectionStart);
-    } else if (selectionStart === originalValue.length) {
-      // 如果光標在末尾，則保持在末尾
-      input.setSelectionRange(value.length, value.length);
-    }
-  }
-
-
   function openTimePicker(defaultTs){
     const base = defaultTs ? new Date(defaultTs) : new Date();
     const h = String(base.getHours()).padStart(2, "0");
     const m = String(base.getMinutes()).padStart(2, "0");
-    const s = String(base.getSeconds()).padStart(2, "0");
 
     const today = new Date();
     timeDateBadge.textContent = fmtDate(today);
 
-    // 預設填入 HH:MM:SS 格式
-    tpTime.value = `${h}:${m}:${s}`;
+    tpTime.value = `${h}${m}`;
     tpTime.focus();
 
     timeMask.style.display = "flex";
@@ -1149,55 +1092,38 @@
 
   tpNow.onclick = () => {
     const d = new Date();
-    tpTime.value = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
-    tpTime.dispatchEvent(new Event('input')); // 觸發一次格式化
+    tpTime.value = `${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
   };
 
-  tpTime.addEventListener("input", (e) => {
-    // 增加即時格式化功能 (HHMMSS -> HH:MM:SS)
-    formatTimeInput(e.target);
-  });
-  
   tpOK.onclick = () => {
     let raw = (tpTime.value || "").trim();
-    if(!raw){ alert("請輸入時間，例如 073015 或 7:30:15"); tpTime.focus(); return; }
+    if(!raw){ alert("請輸入時間，例如 0730 或 7:30"); tpTime.focus(); return; }
 
-    let h, m, s;
-    const parts = raw.split(':');
+    let h, m;
 
-    if (parts.length === 3) {
-      // 格式: H:M:S
-      h = Number(parts[0]);
-      m = Number(parts[1]);
-      s = Number(parts[2]);
-    } else if (parts.length === 2) {
-      // 格式: H:M (秒數預設為 0)
-      h = Number(parts[0]);
-      m = Number(parts[1]);
-      s = 0;
-    } else if (/^\d{3,6}$/.test(raw.replace(/:/g, ''))) {
-      // 格式: HHMMSS (純數字，長度 3~6)
-      const cleaned = raw.replace(/:/g, '').padStart(6, '0');
-      h = Number(cleaned.slice(0, 2));
-      m = Number(cleaned.slice(2, 4));
-      s = Number(cleaned.slice(4, 6));
+    if (/^\d{1,2}:\d{2}$/.test(raw)) {
+      const [hh, mm] = raw.split(":");
+      h = Number(hh); m = Number(mm);
+    } else if (/^\d{3,4}$/.test(raw)) {
+      const s = raw.padStart(4, "0");
+      h = Number(s.slice(0, 2));
+      m = Number(s.slice(2, 4));
     } else {
-      alert("時間格式錯誤，請用 HHMMSS 或 HH:MM:SS");
+      alert("時間格式錯誤，請用 0730 或 7:30");
       tpTime.focus();
       return;
     }
 
-    if(h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59){
-      alert("時間超出範圍（00:00:00 ～ 23:59:59）");
+    if(h < 0 || h > 23 || m < 0 || m > 59){
+      alert("時間超出範圍（00:00 ～ 23:59）");
       tpTime.focus();
       return;
     }
 
-    // 更新輸入框顯示為標準格式
-    tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 
     const d = new Date();
-    d.setHours(h, m, s, 0); // 設定時、分、秒，毫秒固定為 0
+    d.setHours(h, m, 0, 0);
     const ts = d.getTime();
 
     if(timePickerResolve) timePickerResolve(ts);
@@ -1211,7 +1137,7 @@
       closeTimePicker();
     }
   });
-  
+
   // =========================
   // 備份：匯出 / 匯入 + 摘要
   // =========================
@@ -1488,10 +1414,9 @@
         b.lastKillAt = now();
         b.notified = false;
 
-        // ✅ 點擊殺：代表已處理，移出最近重生，清除自動重置旗標
+        // ✅ 點擊殺：代表已處理，移出最近重生
         delete b._recentShownAt;
         delete b._recentIgnored;
-        delete b._autoRespawned; // <-- 修正：清除旗標
 
         saveLocal(state); render(); await pushToCloud();
       }),
@@ -1501,10 +1426,9 @@
         b.lastKillAt = ts;
         b.notified = false;
 
-        // 手動設定也視為已處理 → 移出最近重生，清除自動重置旗標
+        // 手動設定也視為已處理 → 移出最近重生
         delete b._recentShownAt;
         delete b._recentIgnored;
-        delete b._autoRespawned; // <-- 修正：清除旗標
 
         saveLocal(state); render(); await pushToCloud();
       }),
@@ -1535,7 +1459,6 @@
         // 編輯後移出最近重生
         delete b._recentShownAt;
         delete b._recentIgnored;
-        delete b._autoRespawned; // <-- 修正：清除旗標
 
         saveLocal(state); render(); await pushToCloud();
       }),
@@ -1623,14 +1546,14 @@
   };
 
   // =========================
-  // 提醒 + 最近重生：刷新後 15 秒自動開始倒數，但仍保留最近重生直到 10 分鐘自動忽略
+  // 提醒 + 最近重生：刷新後 15 秒自動開始倒數，但仍保留最近重生直到 5 分鐘自動忽略
   // =========================
   function checkAlerts(){
     const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
     const notifyMs = notifyBeforeMin * 60 * 1000;
 
     const AUTO_START_MS = 15 * 1000;      // ✅ 刷新後 15 秒自動開始下一輪倒數
-    const AUTO_IGNORE_MS = 10 * 60 * 1000; // ✅ 修正：最近重生保留 10 分鐘後自動忽略
+    const AUTO_IGNORE_MS = 5 * 60 * 1000; // ✅ 最近重生保留 5 分鐘後自動忽略
 
     let changed = false;
     const t = now();
@@ -1654,24 +1577,24 @@
           // ✅ 刷新瞬間：加入「最近重生」（只做一次）
           if(!b._recentShownAt && !b._recentIgnored){
             b._recentShownAt = t;
-            b._autoRespawned = false; // 確保刷新時重置自動重置旗標
             beep("spawn");
             changed = true;
           }
 
-          // ✅ 修正：超過 15 秒，自動開始下一輪倒數（使用旗標防止重複執行）
-          if(b._recentShownAt && !b._autoRespawned && (t - b._recentShownAt >= AUTO_START_MS)){
-            b.lastKillAt = t;
-            b.notified = false;
-            b._autoRespawned = true; // 標記為已自動重置
-            changed = true;
+          // ✅ 超過 15 秒：自動開始下一輪倒數（但不移出最近重生）
+          if(b._recentShownAt && (t - b._recentShownAt >= AUTO_START_MS)){
+            // 避免每秒一直重置：只做一次（lastKillAt 推到近現在）
+            if(Math.abs((b.lastKillAt ?? 0) - t) > 2000){
+              b.lastKillAt = t;
+              b.notified = false;
+              changed = true;
+            }
           }
 
-          // ✅ 超過 10 分鐘：自動忽略移出最近重生
+          // ✅ 超過 5 分鐘：自動忽略移出最近重生
           if(b._recentShownAt && (t - b._recentShownAt >= AUTO_IGNORE_MS)){
             b._recentIgnored = true;
             delete b._recentShownAt;
-            delete b._autoRespawned; // 清除旗標
             changed = true;
           }
         }
@@ -1710,7 +1633,7 @@
 
     roomId = r;
 
-    setLocked(true, "正在連線/建立房間…");
+    setLocked(true, "同步中，操作已暫時鎖定…");
     setCloudStatus("正在連線房間…", null);
 
     try{
@@ -1720,7 +1643,6 @@
       startRoomListen();
       await startPresence();
 
-      // 只在這裡更新 URL
       const u = new URL(location.href);
       u.searchParams.set("room", roomId);
       history.replaceState(null, "", u.toString());
@@ -1728,7 +1650,7 @@
       render();
     }catch(e){
       console.error(e);
-      setCloudStatus("加入失敗（請檢查 Firebase Rules/Console）", false);
+      setCloudStatus("加入失敗（看 Console/Rules）", false);
       setLocked(false);
     }
   };
@@ -1752,10 +1674,9 @@
   if(urlRoom) roomInput.value = urlRoom;
 
   render();
-  // 每秒更新 UI 和檢查提醒
   setInterval(() => { checkAlerts(); render(); }, 1000);
 
-  // 解鎖音效（瀏覽器規定：需使用者互動）
+  // 解鎖音效（瀏覽器規定）
   window.addEventListener("pointerdown", () => {
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
   }, { once: false });
