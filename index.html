@@ -1,1685 +1,1320 @@
-<!doctype html>
-<html lang="zh-Hant">
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AION 2｜BOSS 倒數計時器（多人共用）</title>
-
-  <style>
-    :root{
-      --bg:#0b0f17; --panel:#121a2a; --text:#e8eefc; --muted:#9fb0d0; --line:rgba(255,255,255,.10);
-      --accent:#7aa7ff; --danger:#ff6b6b; --good:#49d17d; --warn:#ffd166;
-      --shadow: 0 12px 30px rgba(0,0,0,.35); --radius: 16px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans TC", Helvetica, Arial;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0; background:
-        radial-gradient(1200px 600px at 10% 0%, rgba(122,167,255,.16), transparent 60%),
-        radial-gradient(900px 500px at 90% 10%, rgba(73,209,125,.12), transparent 55%),
-        var(--bg);
-      color:var(--text); font-family:var(--sans);
-    }
-
-    /* ✅ topbar 改 fixed 後，需要補上 wrap 的 padding-top（避免被蓋住） */
-    .wrap{max-width:1180px;margin:24px auto;padding:140px 16px 40px}
-
-    /* ✅ 最上方設定列固定不隨滾輪移動 */
-    .topbar{
-      display:flex; gap:12px; align-items:flex-start; justify-content:space-between;
-      padding:16px;
-
-      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
-      border-bottom:1px solid var(--line);
-      box-shadow:var(--shadow);
-
-      position:fixed;
-      top:0; left:0; right:0;
-      z-index:1000;
-      backdrop-filter: blur(10px);
-
-      border-radius:0;
-    }
-
-    .title{display:flex; flex-direction:column; gap:6px; min-width:260px}
-    .title h1{margin:0; font-size:18px; letter-spacing:.2px}
-    .title .sub{color:var(--muted); font-size:12px; line-height:1.35}
-    .controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end}
-    .btn,.chip,select,input[type="number"],input[type="range"],input[type="text"]{
-      border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.06);
-      color:var(--text); padding:9px 12px; font-size:13px;
-    }
-    .btn{cursor:pointer; transition:transform .06s ease, border-color .2s}
-    .btn:hover{border-color:rgba(122,167,255,.55)} .btn:active{transform:translateY(1px)}
-    .btn.danger{border-color:rgba(255,107,107,.35)} .btn.danger:hover{border-color:rgba(255,107,107,.65)}
-    .btn.primary{border-color:rgba(122,167,255,.35)} .btn.primary:hover{border-color:rgba(122,167,255,.70)}
-    .btn.good{border-color:rgba(73,209,125,.35)} .btn.good:hover{border-color:rgba(73,209,125,.70)}
-    .grid{display:grid; grid-template-columns: 1.25fr .75fr; gap:14px; margin-top:14px;}
-    @media (max-width: 980px){
-      .grid{grid-template-columns:1fr}
-    }
-
-    .card{
-      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
-      border:1px solid var(--line); border-radius:var(--radius);
-      box-shadow:var(--shadow); overflow:hidden;
-    }
-    .tabs{display:flex; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap}
-    .tab{
-      padding:7px 10px; border-radius:999px; border:1px solid var(--line);
-      background:rgba(255,255,255,.06); cursor:pointer; font-size:13px;
-    }
-    .tab.active{border-color:rgba(122,167,255,.7); box-shadow:0 0 0 3px rgba(122,167,255,.12) inset}
-    .body{padding:14px 16px}
-    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between}
-    .kpi{display:flex; gap:10px; flex-wrap:wrap}
-    .kpi .chip{display:flex; align-items:center; gap:8px}
-    .hint{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.45}
-    input[type="range"]{accent-color: var(--accent)}
-    .list{display:flex; flex-direction:column; gap:10px; margin-top:14px}
-    .item{
-      padding:12px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.04);
-      display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center;
-    }
-    .meta{display:flex; flex-direction:column; gap:6px; min-width:0}
-    .nameRow{display:flex; gap:8px; align-items:center; min-width:0; flex-wrap:wrap}
-    .name{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px}
-    .star{cursor:pointer; font-size:16px; line-height:1; opacity:.9}
-    .star.off{opacity:.35}
-    .tiny{font-size:12px; color:var(--muted)}
-    .countdown{font-family:var(--mono); font-size:14px}
-    .badge{
-      display:inline-flex; align-items:center; gap:6px;
-      padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line);
-      color:var(--muted);
-    }
-    .badge.good{color:var(--good); border-color:rgba(73,209,125,.25)}
-    .badge.warn{color:var(--warn); border-color:rgba(255,209,102,.25)}
-    .badge.danger{color:var(--danger); border-color:rgba(255,107,107,.25)}
-    .actions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
-    .actions .btn{padding:8px 10px}
-    .favitem{
-      display:flex; justify-content:space-between; align-items:center;
-      padding:10px 12px; border:1px dashed var(--line); border-radius:14px;
-      margin-top:10px;
-    }
-    .favitem .left{display:flex; flex-direction:column; gap:4px; min-width:0}
-    .mono{font-family:var(--mono)}
-    .muted{color:var(--muted)}
-    .roombar{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
-    .roombar input{width:180px}
-    .statusDot{display:inline-block;width:10px;height:10px;border-radius:999px;background:rgba(255,255,255,.25);border:1px solid var(--line);margin-right:6px}
-    .statusDot.ok{background:rgba(73,209,125,.8)}
-    .statusDot.bad{background:rgba(255,107,107,.8)}
-    select{appearance:auto}
-
-    /* ===== 字體大小（本機 UI 偏好） ===== */
-    :root{ --fontScale: 1; }
-    html{ font-size: calc(16px * var(--fontScale)); }
-    html[data-font="sm"]{ --fontScale: 0.92; }
-    html[data-font="md"]{ --fontScale: 1; }
-    html[data-font="lg"]{ --fontScale: 1.10; }
-
-    /* ===== Modal 共用 ===== */
-    .modalMask{
-      position:fixed; inset:0; background:rgba(0,0,0,.55);
-      display:none; align-items:center; justify-content:center;
-      padding:16px; z-index:9999;
-    }
-    .modal{
-      width:min(560px, 96vw);
-      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent), var(--panel);
-      border:1px solid var(--line);
-      border-radius:18px;
-      box-shadow:var(--shadow);
-      overflow:hidden;
-    }
-    .modalHead{
-      padding:12px 14px; border-bottom:1px solid var(--line);
-      display:flex; justify-content:space-between; align-items:center; gap:10px;
-    }
-    .modalHead b{font-size:14px}
-    .modalBody{padding:14px}
-    .modalRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
-    .modalRow .chip{background:rgba(255,255,255,.04)}
-    .modalFoot{
-      padding:12px 14px; border-top:1px solid var(--line);
-      display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;
-    }
-
-    .kv{display:grid; grid-template-columns: 120px 1fr; gap:8px 12px; margin-top:10px}
-    .kv .k{color:var(--muted); font-size:12px}
-    .kv .v{font-size:12px}
-    .hr{height:1px;background:var(--line); margin:12px 0}
-
-    /* ===== UI Lock（同步中鎖定） ===== */
-    body.locked .controls,
-    body.locked .grid,
-    body.locked .tabs{
-      pointer-events:none;
-      opacity:.55;
-      filter:saturate(.8);
-    }
-    .lockBanner{
-      display:none;
-      margin-top:8px;
-      color:var(--muted);
-      font-size:12px;
-    }
-    body.locked .lockBanner{display:block}
-
-    /* 修正下拉選單在暗色背景的顯示 */
-    select {
-      background-color: #121a2a;
-      color: #e8eefc;
-      border: 1px solid rgba(255,255,255,.2);
-    }
-    select option {
-      background-color: #121a2a;
-      color: #e8eefc;
-    }
-    select option:checked {
-      background-color: #1f2a44;
-      color: #ffffff;
-    }
-    select option:hover {
-      background-color: #24335c;
-      color: #ffffff;
-    }
-  </style>
-</head>
-
-<body>
-<div class="wrap">
-  <div class="topbar">
-    <div class="title">
-      <h1>AION 2｜BOSS 倒數計時器（多人共用）</h1>
-      <div class="sub">
-        同一個 Room ID 的人會同步看到同一份倒數資料（擊殺/編輯/新增會即時同步）。<br>
-        ※ 「字體/只看收藏/提示音選單/最近重生篩選」為本機偏好，不會同步到房間。
-      </div>
-
-      <div class="roombar" style="margin-top:8px">
-        <span class="chip">
-          <span class="statusDot" id="dot"></span>
-          <span id="cloudStatus">未連線</span>
-        </span>
-
-        <span class="chip" title="房主=建立房間者（meta.hostId）">
-          身分：<b id="roleLabel" class="mono">—</b>
-        </span>
-
-        <span class="chip" title="你是第幾個加入房間的人（meta.joinSeq）">
-          加入序：<b id="joinIndexLabel" class="mono">—</b>
-        </span>
-
-        <span class="chip" title="25 秒內有心跳視為在線（presence）">
-          線上：<b id="onlineLabel" class="mono">0</b>
-        </span>
-
-        <input id="roomId" type="text" placeholder="Room ID（例如 aion2-01）" />
-        <button class="btn primary" id="btnJoin">加入/建立房間</button>
-        <button class="btn" id="btnCopyLink">複製房間連結</button>
-      </div>
-
-      <div class="lockBanner" id="lockBanner">同步中，操作已暫時鎖定…</div>
-    </div>
-
-    <div class="controls">
-      <button class="btn" id="btnExport">匯出備份</button>
-      <button class="btn" id="btnImport">匯入備份</button>
-      <input type="file" id="fileImport" accept="application/json" style="display:none" />
-
-      <button class="btn danger" id="btnResetLocal">重置本機資料</button>
-
-      <span class="chip" title="活動模式：多數重生時間減半（深淵有例外）">
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
-          <input type="checkbox" id="chkEvent" />
-          活動模式
-        </label>
-      </span>
-
-      <span class="chip">
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
-          <input type="checkbox" id="chkSound" />
-          啟用提醒音
-        </label>
-      </span>
-
-      <span class="chip" style="display:flex;gap:8px;align-items:center;">
-        字體
-        <select id="selFont" class="btn" style="padding:8px 10px">
-          <option value="sm">小</option>
-          <option value="md" selected>中</option>
-          <option value="lg">大</option>
-        </select>
-      </span>
-
-      <span class="chip" title="只顯示你已收藏（⭐）的 BOSS（本機偏好）">
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
-          <input type="checkbox" id="chkOnlyFav" />
-          只看收藏
-        </label>
-      </span>
-
-      <span class="chip" style="display:flex;gap:8px;align-items:center;">
-        即將刷新音效
-        <select id="selSoundWarn" class="btn" style="padding:8px 10px">
-          <option value="soft">柔和（單聲）</option>
-          <option value="sharp" selected>清脆（單聲）</option>
-          <option value="double">雙聲（叮叮）</option>
-          <option value="alarm">警告（短促）</option>
-          <option value="file">音檔（alert.mp3）</option>
-        </select>
-      </span>
-
-      <span class="chip" style="display:flex;gap:8px;align-items:center;">
-        已刷新音效
-        <select id="selSoundSpawn" class="btn" style="padding:8px 10px">
-          <option value="soft">柔和（單聲）</option>
-          <option value="sharp">清脆（單聲）</option>
-          <option value="double" selected>雙聲（叮叮）</option>
-          <option value="alarm">警告（短促）</option>
-          <option value="file">音檔（alert.mp3）</option>
-        </select>
-      </span>
-
-      <span class="chip" style="display:flex;gap:10px;align-items:center;">
-        音量
-        <input type="range" id="rngVol" min="0" max="100" value="60" />
-        <button class="btn" id="btnMute">靜音</button>
-      </span>
-    </div>
-  </div>
-
-  <div class="grid">
-    <div class="card">
-      <div class="tabs" id="tabs"></div>
-      <div class="body">
-        <div class="row" style="align-items:flex-end;">
-          <div class="kpi">
-            <span class="chip">提醒提前 <input id="notifyMin" type="number" min="0" max="180" style="width:84px" /> 分鐘</span>
-            <span class="chip">活動：<b id="eventLabel">OFF</b></span>
-            <span class="chip">房間：<span class="mono" id="roomLabel">（未加入）</span></span>
-          </div>
-          <div class="kpi">
-            <button class="btn primary" id="btnAddBoss">＋新增 BOSS</button>
-            <button class="btn" id="btnAddChannel">＋新增分流</button>
-          </div>
-        </div>
-
-        <div class="hint">
-          <b>「擊殺」</b>＝把下一次刷新時間設為「現在 + 重生時間」。<b>「手動設定」</b>為「單一欄位時間」輸入（0730/7:30 皆可，會自動變 07:30；日期=今天，秒=00）。<br>
-          BOSS 刷新時會進入右側的 <b>「最近重生」</b>；刷新後 <b>15 秒</b> 會自動開始下一輪倒數，但仍保留在最近重生，直到 <b>5 分鐘</b> 後自動忽略移出列表（或你按「擊殺/忽略」立刻移除）。
-        </div>
-
-        <div class="list" id="bossList"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="body">
-
-        <!-- 🟠 最近重生（含篩選） -->
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-          <b>🟠 最近重生</b>
-
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <label class="chip" style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 10px">
-              <input type="checkbox" id="recentChkEly" checked />
-              天族
-            </label>
-            <label class="chip" style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 10px">
-              <input type="checkbox" id="recentChkAsmo" checked />
-              魔族
-            </label>
-            <label class="chip" style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 10px">
-              <input type="checkbox" id="recentChkAbyss" checked />
-              深淵
-            </label>
-
-            <span class="badge" id="recentCount">0</span>
-          </div>
-        </div>
-        <div id="recentBox"></div>
-
-        <div class="hr" style="margin:14px 0;"></div>
-
-        <!-- ⭐ 收藏 -->
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-          <b>⭐ 收藏</b>
-          <span class="badge" id="favCount">0</span>
-        </div>
-        <div id="favBox"></div>
-
-        <div class="hint" style="margin-top:14px">
-          ※ 字體大小 / 只看收藏 / 提示音選單 / 最近重生篩選 為本機偏好，不會同步到房間。
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 手動時間輸入 Modal（只留一欄：時間） -->
-<div class="modalMask" id="timeMask" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
-    <div class="modalHead">
-      <b id="timeTitle">手動設定上次擊殺時間（今天）</b>
-      <span class="badge" id="timeDateBadge"></span>
-    </div>
-    <div class="modalBody">
-      <div class="hint" style="margin-top:0">
-        請輸入 <b>0730</b> 或 <b>7:30</b>，會自動轉成 <b>07:30</b>。日期固定今天，秒固定 00。
-      </div>
-
-      <div class="modalRow" style="margin-top:12px">
-        <span class="chip">時間（HHMM 或 HH:MM）
-          <input id="tp_time" type="text" inputmode="numeric"
-                 placeholder="例如 0730 或 7:30"
-                 style="width:160px">
-        </span>
-        <button class="btn" id="tp_now" title="快速填入目前時間">現在</button>
-      </div>
-    </div>
-    <div class="modalFoot">
-      <button class="btn" id="tp_cancel">取消</button>
-      <button class="btn primary" id="tp_ok">確定</button>
-    </div>
-  </div>
-</div>
-
-<!-- 匯入備份摘要 Modal -->
-<div class="modalMask" id="backupMask" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
-    <div class="modalHead">
-      <b id="backupTitle">匯入備份｜摘要</b>
-      <span class="badge" id="backupBadge">JSON</span>
-    </div>
-    <div class="modalBody">
-      <div class="hint" style="margin-top:0">
-        匯入會<b>覆蓋目前資料</b>。如果你已加入房間，可選擇是否同步到房間（會影響所有人）。
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="kv" id="backupKv"></div>
-
-      <div class="hr"></div>
-
-      <div class="hint" id="backupWarn" style="margin-top:0"></div>
-    </div>
-    <div class="modalFoot" id="backupFoot">
-      <button class="btn" id="backupCancel">取消</button>
-      <button class="btn primary" id="backupImportLocal">只匯入本機</button>
-      <button class="btn danger" id="backupImportSync" style="display:none">匯入並同步到房間</button>
-    </div>
-  </div>
-</div>
-
-<script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
-  import {
-    getFirestore,
-    doc, setDoc, onSnapshot,
-    serverTimestamp,
-    collection,
-    runTransaction
-  } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js';
-
-  // ✅ 你的 Firebase config
-  const firebaseConfig = {
-    apiKey: "AIzaSyB48T3mjUO20-PbKLdgVOU6p3Ega4Oe2p8",
-    authDomain: "aion-2-timer.firebaseapp.com",
-    projectId: "aion-2-timer",
-    storageBucket: "aion-2-timer.firebasestorage.app",
-    messagingSenderId: "385544715160",
-    appId: "1:385544715160:web:25c0b9ba8c380226cb89ed",
-    measurementId: "G-3Q914TBN8P"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  // =========================
-  // Client ID（房主、加入序、線上狀態）
-  // =========================
-  const CLIENT_KEY = "aion2_bosstimer_client_id_v1";
-  function getClientId(){
-    let id = localStorage.getItem(CLIENT_KEY);
-    if(!id){
-      id = "c-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
-      localStorage.setItem(CLIENT_KEY, id);
-    }
-    return id;
-  }
-  const clientId = getClientId();
-
-  // =========================
-  // 基本資料
-  // =========================
-  const now = () => Date.now();
-  const uid = (p) => `${p}-${Math.random().toString(16).slice(2,9)}${Date.now().toString(16).slice(-4)}`;
-
-  // ✅ 你目前的預設 BOSS（可自行編輯/新增）
-  const preset = {
-    channels: [
-      { name:"天族", bosses:[
-        ["西側凱爾農",60,30,"坎塔斯溪谷",""],
-        ["東側涅凱爾",60,30,"坎塔斯溪谷",""],
-        ["腐朽的庫塔爾",60,30,"艾雷倫河沼澤",""],
-        ["盛開的柯林",120,60,"艾雷倫河中游",""],
-        ["護衛兵堤甘特",180,90,"要塞廢墟",""],
-        ["狂鬥士庫桑",240,120,"要塞廢墟",""],
-        ["祭司長加爾新",240,120,"要塞廢墟",""],
-        ["血獠牙普寧",360,180,"要塞廢墟",""],
-        ["憤怒的薩呂",360,180,"要塞廢墟",""],
-        ["學者拉烏拉",240,120,"托爾巴斯森林",""],
-        ["追擊者塔烏羅",240,120,"阿爾拉島部落",""],
-        ["森林戰士烏刺姆",480,240,"阿爾拉島部落",""],
-        ["黑色觸手拉瓦",480,240,"阿爾拉島部落",""],
-        ["叛教者雷西拉",360,180,"阿爾塔米亞峽谷",""],
-        ["百夫長戴米羅斯",480,240,"阿爾塔米亞高原",""],
-        ["神聖的安薩斯",720,360,"阿爾塔米亞高原",""],
-        ["收穫管理者莫夏夫",360,180,"德拉那栽培地",""],
-        ["監視兵器克納許",480,240,"納希德軍團要塞",""],
-        ["研究官塞特蘭",720,360,"納希德軍團要塞",""],
-        ["幻夢卡西亞",720,360,"幻影神庭院",""],
-        ["沉默塔爾坦",720,360,"阿爾塔米亞高原南部",""],
-        ["靈魂支配者卡沙帕",720,360,"阿爾塔米亞高原東部",""],
-        ["軍團長拉格塔",1440,720,"紅色森林",""],
-        ["永恆卡爾吐亞",1440,720,"永恆之島",""],
-      ]},
-      { name:"魔族", bosses:[
-        ["融化的達納爾",60,30,"德雷得奇安失事地",""],
-        ["黑色戰士阿埃德",60,30,"無名墓地",""],
-        ["忠實的拉吉特",60,30,"聖所監視哨所",""],
-        ["狂戰士瓦格",120,60,"聖所監視哨所",""],
-        ["血戰士蘭那爾",180,90,"聖所監視哨所",""],
-        ["掠食者加爾桑",240,120,"瑪斯蘭森林",""],
-        ["欺瞞者特里德",240,120,"烏瑪通海姆",""],
-        ["藍色水波凱爾皮那",240,120,"淨化之森",""],
-        ["參謀官勒沙納",360,180,"淨化之森",""],
-        ["沉默塔爾坦",720,360,"淨化之森",""],
-        ["總監督官努塔",240,120,"德拉那兒園斷",""],
-        ["別動隊長令克斯",360,180,"德拉那兒園斷",""],
-        ["褻瀆者諾布魯德",480,240,"巴斯斐爾特廢墟",""],
-        ["亡魂執政官亞克席歐斯",480,240,"巴斯斐爾特廢墟",""],
-        ["中毒的哈迪倫",360,180,"法夫奈特埋葬地",""],
-        ["靈魂支配者卡沙帕",720,360,"法夫奈特埋葬地",""],
-        ["處刑者巴爾西恩",480,240,"葛利巴德峽谷西部",""],
-        ["德拉坎部隊兵器古魯塔",720,360,"葛利巴德峽谷東部",""],
-        ["百戰老將舒札坎",360,180,"黑爪部落",""],
-        ["秘術卡魯卡",480,240,"黑爪部落",""],
-        ["黑闇比修貝達",720,360,"黑爪部落",""],
-        ["軍團長拉格塔",1440,720,"拉格塔要塞",""],
-        ["敏銳的敘拉克",720,360,"因派園西姆廣場",""],
-        ["不滅卡爾吐亞",1440,720,"不滅之島",""],
-      ]},
-      { name:"深淵", bosses:[
-        ["監視者卡伊拉",60,60,"艾雷修藍塔下層","活動模式時間不變（出現機率↑）"],
-        ["精靈王阿格羅",1440,720,"希埃爾之翼群島 / 希埃爾右翼",""],
-        ["守護神將納赫瑪",0,0,"艾雷修藍塔之根","需手動擊殺後計時（此版先提示）"],
-      ]},
-    ]
-  };
-
-  const defaultState = () => ({
-    version: 8,
-    settings: { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false },
-    activeChannelId: "ch-0",
-    channels: preset.channels.map((ch, idx) => ({
-      id: `ch-${idx}`,
-      name: ch.name,
-      bosses: ch.bosses.map((b, i) => ({
-        id: uid("b"),
-        name: b[0],
-        baseMin: b[1],
-        eventMin: b[2],
-        location: b[3] || "",
-        note: b[4] || "",
-        lastKillAt: now() - (i%5)*12*60*1000,
-        starred: false,
-        notified: false
-      }))
-    }))
-  });
-
-  // =========================
-  // LocalStorage（資料 + UI 偏好）
-  // =========================
-  const LOCAL_KEY = "aion2_bosstimer_firebase_local_cache_v8";
-  const loadLocal = () => { try { const raw = localStorage.getItem(LOCAL_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
-  const saveLocal = (s) => localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
-
-  const UI_KEY = "aion2_bosstimer_firebase_ui_pref_v8";
-  const loadUI = () => { try { const raw = localStorage.getItem(UI_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } };
-  const saveUI = (ui) => localStorage.setItem(UI_KEY, JSON.stringify(ui));
-
-  let uiPref = loadUI() || {
-    font: "md",
-    onlyFav: false,
-    soundWarn: "sharp",
-    soundSpawn: "double",
-    recentFilter: { ely: true, asmo: true, abyss: true } // ✅ 最近重生篩選
-  };
-  uiPref.recentFilter ||= { ely: true, asmo: true, abyss: true };
-
-  let state = loadLocal() || defaultState();
-
-  function normalizeState(s){
-    if(!s || !s.channels) return s;
-    for(const ch of s.channels){
-      ch.bosses ||= [];
-      for(const b of ch.bosses){
-        if(b.location === undefined) b.location = "";
-        if(b.note === undefined) b.note = "";
-        if(b.notified === undefined) b.notified = false;
-        if(b.starred === undefined) b.starred = false;
-        if(b.lastKillAt === undefined) b.lastKillAt = now();
-        // ✅ 最近重生欄位
-        // _recentShownAt: number
-        // _recentIgnored: boolean
-      }
-    }
-    if(!s.settings) s.settings = { soundEnabled:false, volume:0.60, muted:false, notifyBeforeMin:3, eventMode:false };
-    if(s.settings.notifyBeforeMin === undefined) s.settings.notifyBeforeMin = 3;
-    if(s.settings.eventMode === undefined) s.settings.eventMode = false;
-    if(s.settings.volume === undefined) s.settings.volume = 0.60;
-    if(s.settings.muted === undefined) s.settings.muted = false;
-    if(s.settings.soundEnabled === undefined) s.settings.soundEnabled = false;
-    if(!s.activeChannelId && s.channels?.[0]?.id) s.activeChannelId = s.channels[0].id;
-    return s;
-  }
-  state = normalizeState(state);
-  saveLocal(state);
-
-  // =========================
-  // Firestore：房間同步 + presence
-  // =========================
-  let roomId = "";
-  let unsubRoom = null;
-
-  const roomDocRef = () => doc(db, "rooms", roomId);
-  const presenceColRef = () => collection(db, "rooms", roomId, "presence");
-  const presenceDocRef = () => doc(db, "rooms", roomId, "presence", clientId);
-
-  // UI：身分/加入序/線上數
-  const roleLabel = document.querySelector("#roleLabel");
-  const joinIndexLabel = document.querySelector("#joinIndexLabel");
-  const onlineLabel = document.querySelector("#onlineLabel");
-
-  let isHost = false;
-  let joinIndex = null;
-
-  // UI lock
-  const lockBanner = document.querySelector("#lockBanner");
-  function setLocked(lock, text){
-    document.body.classList.toggle("locked", !!lock);
-    if(text) lockBanner.textContent = text;
-  }
-
-  // cloud status chip
-  const dot = document.querySelector("#dot");
-  const cloudStatus = document.querySelector("#cloudStatus");
-  function setCloudStatus(text, ok=null){
-    cloudStatus.textContent = text;
-    dot.classList.toggle("ok", ok === true);
-    dot.classList.toggle("bad", ok === false);
-  }
-
-  // presence / heartbeat
-  let unsubPresence = null;
-  let presenceTimer = null;
-
-  async function startPresence(){
-    await setDoc(presenceDocRef(), {
-      clientId,
-      lastSeen: serverTimestamp(),
-      joinedAt: serverTimestamp()
-    }, { merge: true });
-
-    if(presenceTimer) clearInterval(presenceTimer);
-    presenceTimer = setInterval(async () => {
-      try{
-        await setDoc(presenceDocRef(), { lastSeen: serverTimestamp() }, { merge: true });
-      }catch(_e){}
-    }, 10000);
-
-    if(unsubPresence) unsubPresence();
-    unsubPresence = onSnapshot(presenceColRef(), (snap) => {
-      const nowMs = Date.now();
-      let alive = 0;
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
-        const ts = d?.lastSeen?.toMillis ? d.lastSeen.toMillis() : 0;
-        if(ts && (nowMs - ts) <= 25000) alive++;
-      });
-      onlineLabel.textContent = String(alive);
-    }, (err) => {
-      console.warn("presence 監聽失敗：", err);
-      onlineLabel.textContent = "0";
-    });
-  }
-
-  function stopPresence(){
-    if(unsubPresence){ unsubPresence(); unsubPresence = null; }
-    if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
-  }
-
-  // ✅ Transaction：建立房間 meta（hostId/joinSeq）並返回加入序
-  async function ensureRoomAndJoinMeta(){
-    const ref = roomDocRef();
-    const result = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const existed = snap.exists();
-
-      if(!existed){
-        const hostId = clientId;
-        tx.set(ref, {
-          meta: { hostId, joinSeq: 1, createdAt: serverTimestamp() },
-          state,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        return { existed:false, hostId, joinIndex:1 };
-      }
-
-      const data = snap.data() || {};
-      const hostId = data?.meta?.hostId || null;
-      const seq = Number(data?.meta?.joinSeq || 0) + 1;
-
-      tx.set(ref, { meta: { joinSeq: seq } }, { merge: true });
-      return { existed:true, hostId, joinIndex:seq };
-    });
-
-    joinIndex = result.joinIndex;
-    isHost = (result.hostId === clientId);
-
-    roleLabel.textContent = isHost ? "房主" : "成員";
-    joinIndexLabel.textContent = String(joinIndex);
-
-    return result.existed;
-  }
-
-  let applyingRemote = false;
-  let firstSnapshotArrived = false;
-
-  function startRoomListen(){
-    if(unsubRoom) unsubRoom();
-    const ref = roomDocRef();
-
-    firstSnapshotArrived = false;
-
-    unsubRoom = onSnapshot(ref, (snap) => {
-      if(!snap.exists()) return;
-      const data = snap.data();
-      if(!data?.state) return;
-
-      applyingRemote = true;
-      state = normalizeState(data.state);
-      saveLocal(state);
-      render();
-      applyingRemote = false;
-
-      if(!firstSnapshotArrived){
-        firstSnapshotArrived = true;
-        setLocked(false);
-      }
-
-      // 更新房主顯示（若 meta.hostId 存在）
-      const hostId = data?.meta?.hostId;
-      if(hostId){
-        isHost = (hostId === clientId);
-        roleLabel.textContent = isHost ? "房主" : "成員";
-      }
-
-      setCloudStatus("已同步完成", true);
-    }, (err) => {
-      console.error(err);
-      setCloudStatus("連線失敗（看 Console/Rules）", false);
-      setLocked(false);
-    });
-  }
-
-  async function pushToCloud(){
-    if(!roomId) return;
-    if(applyingRemote) return;
-    try{
-      await setDoc(roomDocRef(), { state, updatedAt: serverTimestamp() }, { merge: true });
-      setCloudStatus("已同步完成", true);
-    }catch(e){
-      console.error(e);
-      setCloudStatus("寫入失敗（看 Rules/Console）", false);
-    }
-  }
-
-  // =========================
-  // UI / 倒數
-  // =========================
-  const $ = (q) => document.querySelector(q);
-  const tabsEl = $("#tabs");
-  const listEl = $("#bossList");
-  const recentBox = $("#recentBox");
-  const recentCount = $("#recentCount");
-  const favBox = $("#favBox");
-  const favCount = $("#favCount");
-
-  const chkSound = $("#chkSound");
-  const chkEvent = $("#chkEvent");
-  const rngVol = $("#rngVol");
-  const btnMute = $("#btnMute");
-  const notifyMin = $("#notifyMin");
-  const eventLabel = $("#eventLabel");
-  const roomLabel = $("#roomLabel");
-
-  const selFont = $("#selFont");
-  const chkOnlyFav = $("#chkOnlyFav");
-  const selSoundWarn = $("#selSoundWarn");
-  const selSoundSpawn = $("#selSoundSpawn");
-
-  // ✅ 最近重生篩選（本機偏好）
-  const recentChkEly = $("#recentChkEly");
-  const recentChkAsmo = $("#recentChkAsmo");
-  const recentChkAbyss = $("#recentChkAbyss");
-
-  const btnExport = $("#btnExport");
-  const btnImport = $("#btnImport");
-  const fileImport = $("#fileImport");
-
-  function applyRecentFilterToUI(){
-    recentChkEly.checked = !!uiPref.recentFilter.ely;
-    recentChkAsmo.checked = !!uiPref.recentFilter.asmo;
-    recentChkAbyss.checked = !!uiPref.recentFilter.abyss;
-  }
-
-  recentChkEly.onchange = () => {
-    uiPref.recentFilter.ely = recentChkEly.checked;
-    saveUI(uiPref);
-    render();
-  };
-  recentChkAsmo.onchange = () => {
-    uiPref.recentFilter.asmo = recentChkAsmo.checked;
-    saveUI(uiPref);
-    render();
-  };
-  recentChkAbyss.onchange = () => {
-    uiPref.recentFilter.abyss = recentChkAbyss.checked;
-    saveUI(uiPref);
-    render();
-  };
-
-  // ===== 提示音（選單 + 不同狀態）=====
-  let audioCtx = null;
-  function ensureAudio(){
-    if(!audioCtx){
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-  }
-
-  let alertAudio = null;
-  function playFileAlert(){
-    try{
-      if(!alertAudio){
-        alertAudio = new Audio("alert.mp3");
-        alertAudio.preload = "auto";
-      }
-      alertAudio.volume = Math.max(0, Math.min(1, state.settings.volume ?? 0.6));
-      alertAudio.currentTime = 0;
-      alertAudio.play().catch(()=>{});
-    }catch(e){
-      console.warn("音檔提示音播放失敗：", e);
-    }
-  }
-
-  function playTone({ type="triangle", freq=880, dur=0.26 }){
-    ensureAudio();
-    const t = audioCtx.currentTime;
-
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t);
-
-    const vol = Math.max(0, Math.min(1, state.settings.volume ?? 0.6));
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.35 * vol, t + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + dur + 0.02);
-  }
-
-  function playDouble(){
-    ensureAudio();
-    const base = audioCtx.currentTime;
-    const vol = Math.max(0, Math.min(1, state.settings.volume ?? 0.6));
-
-    const one = (start) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(880, start);
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.35 * vol, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.20);
-      osc.connect(gain).connect(audioCtx.destination);
-      osc.start(start);
-      osc.stop(start + 0.22);
-    };
-
-    one(base);
-    one(base + 0.28);
-  }
-
-  function beep(kind = "warn"){
-    if(!state.settings.soundEnabled || state.settings.muted) return;
-
-    const mode = (kind === "spawn")
-      ? (uiPref.soundSpawn || "double")
-      : (uiPref.soundWarn || "sharp");
-
-    if(mode === "file"){ playFileAlert(); return; }
-    if(mode === "double"){ playDouble(); return; }
-    if(mode === "soft"){ playTone({ type:"sine", freq:660, dur:0.30 }); return; }
-    if(mode === "alarm"){ playTone({ type:"square", freq:900, dur:0.18 }); return; }
-
-    playTone({ type:"triangle", freq:1200, dur:0.22 }); // sharp
-  }
-
-  const pad2 = n => String(n).padStart(2,"0");
-  const fmtDuration = (ms) => {
-    ms = Math.max(0, ms);
-    const s = Math.floor(ms/1000);
-    const hh = Math.floor(s/3600);
-    const mm = Math.floor((s%3600)/60);
-    const ss = s%60;
-    return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
-  };
-  const fmtTime = (ts) => {
-    const d = new Date(ts);
-    return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  };
-  const fmtDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-  const escapeHtml = (s) => String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-
-  const activeChannel = () => state.channels.find(c => c.id === state.activeChannelId) || state.channels[0];
-  const respawnMin = (b) => {
-    const em = state.settings.eventMode;
-    const m = em ? (b.eventMin ?? b.baseMin) : (b.baseMin ?? b.eventMin);
-    return Math.max(0, Number(m)||0);
-  };
-  const nextSpawn = (b) => (b.lastKillAt ?? 0) + respawnMin(b) * 60 * 1000;
-  const sortBosses = (arr) => [...arr].sort((a,b)=> nextSpawn(a)-nextSpawn(b));
-  const computeStatus = (remainMs, notifyBeforeMin) => {
-    const notifyMs = (notifyBeforeMin ?? 0) * 60 * 1000;
-    if(remainMs <= 0) return {text:"已刷新", cls:"danger"};
-    if(remainMs <= notifyMs) return {text:`即將刷新（≤${notifyBeforeMin} 分）`, cls:"warn"};
-    return {text:"計時中", cls:"good"};
-  };
-  const mkBtn = (text, cls, onClick) => {
-    const b = document.createElement("button");
-    b.className = cls;
-    b.textContent = text;
-    b.onclick = onClick;
-    return b;
-  };
-  const allStarred = () => {
-    const out = [];
-    for(const ch of state.channels) for(const b of ch.bosses) if(b.starred) out.push({ch,b});
-    return out.sort((x,y)=> nextSpawn(x.b)-nextSpawn(y.b));
-  };
-
-  // =========================
-  // 🟠 最近重生：收集/渲染（最多顯示 10 隻 + 分類篩選）
-  // =========================
-  function getRecentRespawns(){
-    const items = [];
-    const TTL_MS = 5 * 60 * 1000; // 5 分鐘後自動忽略
-    const t = now();
-
-    for(const ch of state.channels){
-      const nm = (ch.name || "").trim();
-      const kind =
-        /天族/.test(nm) ? "ely" :
-        /魔族/.test(nm) ? "asmo" :
-        /深淵/.test(nm) ? "abyss" : "other";
-
-      if(kind !== "other" && uiPref?.recentFilter && uiPref.recentFilter[kind] === false){
-        continue; // ✅ 該分類沒勾選就跳過整個分流
-      }
-
-      for(const b of (ch.bosses || [])){
-        if(b._recentShownAt && !b._recentIgnored){
-          if(t - b._recentShownAt <= TTL_MS){
-            items.push({ ch, b });
-          }
-        }
-      }
-    }
-    items.sort((x,y) => (y.b._recentShownAt||0) - (x.b._recentShownAt||0));
-    return items;
-  }
-
-  function renderRecentRespawns(){
-    const itemsAll = getRecentRespawns();
-    const items = itemsAll.slice(0, 10); // ✅ 最多顯示 10 隻
-    recentCount.textContent = String(items.length);
-    recentBox.innerHTML = "";
-
-    if(items.length === 0){
-      const e = document.createElement("div");
-      e.className = "tiny muted";
-      e.style.marginTop = "10px";
-      e.textContent = "目前沒有「最近重生」的 BOSS。";
-      recentBox.appendChild(e);
-      return;
-    }
-
-    for(const { ch, b } of items){
-      const row = document.createElement("div");
-      row.className = "favitem";
-
-      const left = document.createElement("div");
-      left.className = "left";
-
-      const sinceMs = now() - (b._recentShownAt || now());
-      const sinceMin = Math.floor(sinceMs / 60000);
-      const sinceSec = Math.floor((sinceMs % 60000) / 1000);
-
-      left.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap">
-          <span class="badge">${escapeHtml(ch.name)}</span>
-          ${b.location ? `<span class="badge">${escapeHtml(b.location)}</span>` : ""}
-          <b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(b.name)}</b>
-        </div>
-        <div class="tiny mono">
-          已重生：${pad2(sinceMin)}:${pad2(sinceSec)}
-          <span class="muted">｜</span> 下次：${fmtTime(nextSpawn(b))}
-        </div>
-      `;
-
-      const right = document.createElement("div");
-      right.className = "actions";
-
-      right.append(
-        mkBtn("前往", "btn", async () => {
-          state.activeChannelId = ch.id;
-          saveLocal(state);
-          render();
-          await pushToCloud();
-          window.scrollTo({top:0, behavior:"smooth"});
-        }),
-
-        mkBtn("擊殺", "btn good", async () => {
-          b.lastKillAt = now();
-          b.notified = false;
-
-          // ✅ 點擊殺：代表已處理，移出最近重生
-          delete b._recentShownAt;
-          delete b._recentIgnored;
-
-          saveLocal(state);
-          render();
-          await pushToCloud();
-        }),
-
-        mkBtn("忽略", "btn danger", async () => {
-          // ✅ 忽略：立刻移出最近重生
-          b._recentIgnored = true;
-          delete b._recentShownAt;
-
-          saveLocal(state);
-          render();
-          await pushToCloud();
-        })
-      );
-
-      row.append(left, right);
-      recentBox.appendChild(row);
-    }
-  }
-
-  // =========================
-  // 手動時間輸入（今天）：單欄「時間」
-  // =========================
-  const timeMask = $("#timeMask");
-  const tpTime = $("#tp_time");
-  const tpOK = $("#tp_ok");
-  const tpCancel = $("#tp_cancel");
-  const tpNow = $("#tp_now");
-  const timeDateBadge = $("#timeDateBadge");
-
-  let timePickerResolve = null;
-
-  function openTimePicker(defaultTs){
-    const base = defaultTs ? new Date(defaultTs) : new Date();
-    const h = String(base.getHours()).padStart(2, "0");
-    const m = String(base.getMinutes()).padStart(2, "0");
-
-    const today = new Date();
-    timeDateBadge.textContent = fmtDate(today);
-
-    tpTime.value = `${h}${m}`;
-    tpTime.focus();
-
-    timeMask.style.display = "flex";
-    timeMask.setAttribute("aria-hidden", "false");
-
-    return new Promise(resolve => { timePickerResolve = resolve; });
-  }
-
-  function closeTimePicker(){
-    timeMask.style.display = "none";
-    timeMask.setAttribute("aria-hidden", "true");
-    timePickerResolve = null;
-  }
-
-  tpCancel.onclick = () => {
-    if(timePickerResolve) timePickerResolve(null);
-    closeTimePicker();
-  };
-
-  timeMask.addEventListener("click", (e) => {
-    if(e.target === timeMask){
-      if(timePickerResolve) timePickerResolve(null);
-      closeTimePicker();
-    }
-  });
-
-  tpNow.onclick = () => {
-    const d = new Date();
-    tpTime.value = `${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
-  };
-
-  tpOK.onclick = () => {
-    let raw = (tpTime.value || "").trim();
-    if(!raw){ alert("請輸入時間，例如 0730 或 7:30"); tpTime.focus(); return; }
-
-    let h, m;
-
-    if (/^\d{1,2}:\d{2}$/.test(raw)) {
-      const [hh, mm] = raw.split(":");
-      h = Number(hh); m = Number(mm);
-    } else if (/^\d{3,4}$/.test(raw)) {
-      const s = raw.padStart(4, "0");
-      h = Number(s.slice(0, 2));
-      m = Number(s.slice(2, 4));
-    } else {
-      alert("時間格式錯誤，請用 0730 或 7:30");
-      tpTime.focus();
-      return;
-    }
-
-    if(h < 0 || h > 23 || m < 0 || m > 59){
-      alert("時間超出範圍（00:00 ～ 23:59）");
-      tpTime.focus();
-      return;
-    }
-
-    tpTime.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    const ts = d.getTime();
-
-    if(timePickerResolve) timePickerResolve(ts);
-    closeTimePicker();
-  };
-
-  tpTime.addEventListener("keydown", (e) => { if(e.key === "Enter") tpOK.click(); });
-  window.addEventListener("keydown", (e) => {
-    if(e.key === "Escape" && timeMask.style.display === "flex"){
-      if(timePickerResolve) timePickerResolve(null);
-      closeTimePicker();
-    }
-  });
-
-  // =========================
-  // 備份：匯出 / 匯入 + 摘要
-  // =========================
-  const backupMask = $("#backupMask");
-  const backupKv = $("#backupKv");
-  const backupWarn = $("#backupWarn");
-  const backupCancel = $("#backupCancel");
-  const backupImportLocal = $("#backupImportLocal");
-  const backupImportSync = $("#backupImportSync");
-  let pendingBackup = null;
-
-  function openBackupModal(summary){
-    backupKv.innerHTML = summary.kv.map(([k,v]) => `
-      <div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div>
-    `).join("");
-    backupWarn.textContent = summary.warnText || "";
-    backupImportSync.style.display = roomId ? "inline-flex" : "none";
-    backupMask.style.display = "flex";
-    backupMask.setAttribute("aria-hidden", "false");
-  }
-  function closeBackupModal(){
-    backupMask.style.display = "none";
-    backupMask.setAttribute("aria-hidden", "true");
-    pendingBackup = null;
-  }
-  backupCancel.onclick = () => closeBackupModal();
-  backupMask.addEventListener("click", (e) => { if(e.target === backupMask) closeBackupModal(); });
-
-  function countBackupInfo(s){
-    const chN = s?.channels?.length || 0;
-    let bossN = 0, starredN = 0, hasTime = false;
-    for(const ch of (s.channels || [])){
-      bossN += (ch.bosses || []).length;
-      for(const b of (ch.bosses || [])){
-        if(b.starred) starredN++;
-        if(typeof b.lastKillAt === "number") hasTime = true;
-      }
-    }
-    return { chN, bossN, starredN, hasTime };
-  }
-
-  function buildBackupSummary(data){
-    const st = data?.state;
-    const meta = {
-      exportedAt: data?.exportedAt || "",
-      roomId: data?.roomId ?? null,
-      version: data?.version ?? st?.version ?? "",
-      fileName: data?.fileName || ""
-    };
-    const info = countBackupInfo(st);
-    const exp = meta.exportedAt ? new Date(meta.exportedAt) : null;
-
-    const kv = [
-      ["檔案", meta.fileName || "（未提供）"],
-      ["備份時間", exp && !isNaN(exp) ? exp.toLocaleString() : "（未知）"],
-      ["備份版本", String(meta.version || "（未知）")],
-      ["備份房間", meta.roomId ? String(meta.roomId) : "（未記錄）"],
-      ["分流數", String(info.chN)],
-      ["BOSS 總數", String(info.bossN)],
-      ["收藏數（⭐）", String(info.starredN)],
-      ["包含時間資料", info.hasTime ? "是" : "否"]
-    ];
-
-    let warnText = "";
-    if(roomId && meta.roomId && meta.roomId !== roomId){
-      warnText = `注意：此備份的房間為「${meta.roomId}」，你目前加入的房間為「${roomId}」。若選擇「匯入並同步到房間」，將覆蓋目前房間所有人的資料。`;
-    }else if(roomId && !meta.roomId){
-      warnText = `注意：此備份沒有房間資訊。若選擇「匯入並同步到房間」，將覆蓋目前房間所有人的資料。`;
-    }else{
-      warnText = `提示：選「只匯入本機」只影響你的瀏覽器；選「匯入並同步到房間」會覆蓋房間所有人。`;
-    }
-
-    return { kv, warnText, meta, info };
-  }
-
-  btnExport.onclick = () => {
-    const payload = {
-      version: state.version,
-      exportedAt: new Date().toISOString(),
-      roomId: roomId || null,
-      state
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const ts = new Date();
-    const name = `aion2-boss-backup-${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,"0")}${String(ts.getDate()).padStart(2,"0")}-${String(ts.getHours()).padStart(2,"0")}${String(ts.getMinutes()).padStart(2,"0")}.json`;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
-  btnImport.onclick = () => fileImport.click();
-
-  fileImport.onchange = async (e) => {
-    const file = e.target.files?.[0];
-    if(!file) return;
-    try{
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if(!data || !data.state || !Array.isArray(data.state.channels)){
-        alert("備份檔格式不正確（缺少 state/channels）");
-        return;
-      }
-      data.fileName = file.name;
-      data.state = normalizeState(data.state);
-      pendingBackup = data;
-      openBackupModal(buildBackupSummary(pendingBackup));
-    }catch(err){
-      console.error(err);
-      alert("匯入失敗：請確認檔案是否為有效 JSON");
-    }finally{
-      fileImport.value = "";
-    }
-  };
-
-  async function applyImport({syncToRoom}){
-    if(!pendingBackup?.state) return;
-    state = normalizeState(pendingBackup.state);
-    saveLocal(state);
-    render();
-    if(syncToRoom && roomId) await pushToCloud();
-    closeBackupModal();
-    alert(syncToRoom && roomId ? "匯入完成（已同步到房間）" : "匯入完成（只影響本機）");
-  }
-
-  backupImportLocal.onclick = async () => {
-    if(!confirm("確定要匯入備份並覆蓋目前資料（只影響本機）？")) return;
-    await applyImport({syncToRoom:false});
-  };
-
-  backupImportSync.onclick = async () => {
-    if(!roomId){ alert("你尚未加入房間，無法同步到房間。"); return; }
-    if(!confirm("⚠️ 確定要匯入備份並同步到房間？這會覆蓋房間所有人的資料。")) return;
-    await applyImport({syncToRoom:true});
-  };
-
-  // =========================
-  // Render
-  // =========================
-  function render(){
-    document.documentElement.dataset.font = uiPref.font || "md";
-    selFont.value = uiPref.font || "md";
-    chkOnlyFav.checked = !!uiPref.onlyFav;
-    selSoundWarn.value = uiPref.soundWarn || "sharp";
-    selSoundSpawn.value = uiPref.soundSpawn || "double";
-
-    applyRecentFilterToUI();
-
-    chkSound.checked = !!state.settings.soundEnabled;
-    chkEvent.checked = !!state.settings.eventMode;
-    eventLabel.textContent = state.settings.eventMode ? "ON" : "OFF";
-    eventLabel.style.color = state.settings.eventMode ? "var(--warn)" : "var(--muted)";
-    rngVol.value = Math.round((state.settings.volume ?? 0.6)*100);
-    btnMute.textContent = state.settings.muted ? "取消靜音" : "靜音";
-    notifyMin.value = state.settings.notifyBeforeMin ?? 3;
-    roomLabel.textContent = roomId ? roomId : "（未加入）";
-
-    tabsEl.innerHTML = "";
-    state.channels.forEach(ch => {
-      const t = document.createElement("button");
-      t.className = "tab" + (ch.id===state.activeChannelId ? " active" : "");
-      t.textContent = ch.name;
-      t.onclick = async () => { state.activeChannelId = ch.id; saveLocal(state); render(); await pushToCloud(); };
-      tabsEl.appendChild(t);
-    });
-
-    const ch = activeChannel();
-    const rawBosses = ch.bosses || [];
-    const bosses = sortBosses(uiPref.onlyFav ? rawBosses.filter(b => b.starred) : rawBosses);
-
-    listEl.innerHTML = "";
-    if(bosses.length === 0){
-      const empty = document.createElement("div");
-      empty.className = "tiny muted";
-      empty.textContent = uiPref.onlyFav
-        ? "你已開啟「只看收藏」，但此分流沒有收藏的 BOSS。"
-        : "這個分流還沒有 BOSS，點「＋新增 BOSS」開始。";
-      listEl.appendChild(empty);
-    }else{
-      bosses.forEach(b => listEl.appendChild(renderBossItem(ch, b)));
-    }
-
-    // ✅ 先渲染最近重生
-    renderRecentRespawns();
-
-    // ⭐ 收藏
-    const starred = allStarred();
-    favCount.textContent = starred.length;
-    favBox.innerHTML = "";
-    if(starred.length === 0){
-      const e = document.createElement("div");
-      e.className = "tiny muted"; e.style.marginTop = "10px";
-      e.textContent = "還沒有收藏。點 BOSS 名稱旁邊的 ☆ 來收藏。";
-      favBox.appendChild(e);
-    }else{
-      for(const {ch, b} of starred){
-        const row = document.createElement("div");
-        row.className = "favitem";
-        const left = document.createElement("div");
-        left.className = "left";
-        left.innerHTML = `
-          <div style="display:flex;gap:8px;align-items:center;min-width:0;flex-wrap:wrap">
-            <span class="badge">${escapeHtml(ch.name)}</span>
-            ${b.location ? `<span class="badge">${escapeHtml(b.location)}</span>` : ""}
-            <b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(b.name)}</b>
-          </div>
-          <div class="tiny mono">${fmtDuration(nextSpawn(b)-now())} <span class="muted">｜</span> ${fmtTime(nextSpawn(b))}</div>
-        `;
-        const right = document.createElement("div");
-        right.className = "actions";
-        right.append(
-          mkBtn("前往", "btn", async () => { state.activeChannelId = ch.id; saveLocal(state); render(); await pushToCloud(); window.scrollTo({top:0,behavior:"smooth"}); }),
-          mkBtn("取消⭐", "btn", async () => { b.starred=false; saveLocal(state); render(); await pushToCloud(); })
-        );
-        row.append(left, right);
-        favBox.appendChild(row);
-      }
-    }
-  }
-
-  function renderBossItem(ch, b){
-    const item = document.createElement("div");
-    item.className = "item";
-    const meta = document.createElement("div");
-    meta.className = "meta";
-
-    const nameRow = document.createElement("div");
-    nameRow.className = "nameRow";
-
-    const star = document.createElement("span");
-    star.className = "star " + (b.starred ? "on" : "off");
-    star.textContent = b.starred ? "⭐" : "☆";
-    star.title = b.starred ? "取消收藏" : "收藏";
-    star.onclick = async () => { b.starred = !b.starred; saveLocal(state); render(); await pushToCloud(); };
-
-    const name = document.createElement("div");
-    name.className = "name";
-    name.textContent = b.name;
-
-    const locBadge = document.createElement("span");
-    locBadge.className = "badge";
-    locBadge.textContent = b.location ? b.location : "（未填地區）";
-
-    const m = respawnMin(b);
-    const timeBadge = document.createElement("span");
-    timeBadge.className = "badge";
-    timeBadge.textContent = m>0 ? `${m} 分` : `需手動`;
-
-    nameRow.append(star, name, locBadge, timeBadge);
-
-    const cd = document.createElement("div");
-    cd.className = "countdown";
-    const tNext = nextSpawn(b);
-    const remain = tNext - now();
-    cd.textContent = `${fmtDuration(remain)}  ｜  ${fmtTime(tNext)}`;
-
-    const sub = document.createElement("div");
-    sub.className = "tiny";
-    sub.textContent = `上次擊殺：${b.lastKillAt ? fmtTime(b.lastKillAt) : "未設定"}`;
-
-    const status = document.createElement("div");
-    status.className = "tiny";
-    const st = computeStatus(remain, state.settings.notifyBeforeMin);
-    const note = (b.note || "").trim();
-    status.innerHTML = `狀態：<span class="badge ${st.cls}">${st.text}</span>` + (note ? ` <span class="muted">｜</span> <span class="muted">${escapeHtml(note)}</span>` : "");
-    meta.append(nameRow, cd, sub, status);
-
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    actions.append(
-      mkBtn("擊殺", "btn good", async () => {
-        b.lastKillAt = now();
-        b.notified = false;
-
-        // ✅ 點擊殺：代表已處理，移出最近重生
-        delete b._recentShownAt;
-        delete b._recentIgnored;
-
-        saveLocal(state); render(); await pushToCloud();
-      }),
-      mkBtn("手動設定", "btn", async () => {
-        const ts = await openTimePicker(b.lastKillAt);
-        if(!ts) return;
-        b.lastKillAt = ts;
-        b.notified = false;
-
-        // 手動設定也視為已處理 → 移出最近重生
-        delete b._recentShownAt;
-        delete b._recentIgnored;
-
-        saveLocal(state); render(); await pushToCloud();
-      }),
-      mkBtn("編輯", "btn primary", async () => {
-        const newName = prompt("BOSS 名稱（繁中）：", b.name);
-        if(newName === null) return;
-        const newLoc = prompt("出現地區（位置）：", b.location || "");
-        if(newLoc === null) return;
-        const baseMin = prompt("平常重生（分鐘，0=需手動）：", String(b.baseMin ?? 0));
-        if(baseMin === null) return;
-        const eventMin = prompt("活動重生（分鐘，0=需手動）：", String(b.eventMin ?? 0));
-        if(eventMin === null) return;
-        const newNote = prompt("備註（可留空）：", b.note || "");
-        if(newNote === null) return;
-
-        const bM = Number(baseMin), eM = Number(eventMin);
-        if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){
-          alert("分鐘數請輸入 0 或正整數"); return;
-        }
-
-        b.name = (newName.trim() || b.name);
-        b.location = (newLoc.trim());
-        b.baseMin = Math.round(bM);
-        b.eventMin = Math.round(eM);
-        b.note = newNote.trim();
-        b.notified = false;
-
-        // 編輯後移出最近重生
-        delete b._recentShownAt;
-        delete b._recentIgnored;
-
-        saveLocal(state); render(); await pushToCloud();
-      }),
-      mkBtn("刪除", "btn danger", async () => {
-        if(!confirm(`刪除「${b.name}」？`)) return;
-        ch.bosses = ch.bosses.filter(x => x.id !== b.id);
-        saveLocal(state); render(); await pushToCloud();
-      })
-    );
-
-    item.append(meta, actions);
-    return item;
-  }
-
-  // =========================
-  // 控制項
-  // =========================
-  document.querySelector("#btnResetLocal").onclick = () => {
-    if(!confirm("重置本機資料？（不會刪雲端房間）")) return;
-    localStorage.removeItem(LOCAL_KEY);
-    state = defaultState();
-    saveLocal(state);
-    render();
-  };
-
-  chkSound.onchange = async () => { state.settings.soundEnabled = chkSound.checked; saveLocal(state); render(); await pushToCloud(); };
-  chkEvent.onchange = async () => {
-    state.settings.eventMode = chkEvent.checked;
-    for(const ch of state.channels) for(const b of ch.bosses) b.notified = false;
-    saveLocal(state); render(); await pushToCloud();
-  };
-  rngVol.oninput = async () => { state.settings.volume = Math.max(0, Math.min(1, Number(rngVol.value)/100)); saveLocal(state); };
-  btnMute.onclick = async () => { state.settings.muted = !state.settings.muted; saveLocal(state); render(); await pushToCloud(); };
-  notifyMin.onchange = async () => {
-    const v = Number(notifyMin.value);
-    state.settings.notifyBeforeMin = Number.isFinite(v) ? Math.max(0, Math.min(180, Math.round(v))) : 3;
-    for(const ch of state.channels) for(const b of ch.bosses) b.notified = false;
-    saveLocal(state); render(); await pushToCloud();
-  };
-
-  selFont.onchange = () => { uiPref.font = selFont.value; saveUI(uiPref); render(); };
-  chkOnlyFav.onchange = () => { uiPref.onlyFav = chkOnlyFav.checked; saveUI(uiPref); render(); };
-  selSoundWarn.onchange = () => { uiPref.soundWarn = selSoundWarn.value; saveUI(uiPref); render(); };
-  selSoundSpawn.onchange = () => { uiPref.soundSpawn = selSoundSpawn.value; saveUI(uiPref); render(); };
-
-  document.querySelector("#btnAddBoss").onclick = async () => {
-    const name = prompt("BOSS 名稱（繁中）：", "新BOSS");
-    if(name === null) return;
-    const loc = prompt("出現地區（位置）：", "");
-    if(loc === null) return;
-    const baseMin = prompt("平常重生（分鐘，0=需手動）：", "60");
-    if(baseMin === null) return;
-    const eventMin = prompt("活動重生（分鐘，0=需手動）：", "30");
-    if(eventMin === null) return;
-    const note = prompt("備註（可留空）：", "");
-    if(note === null) return;
-
-    const bM = Number(baseMin), eM = Number(eventMin);
-    if(!Number.isFinite(bM) || bM < 0 || !Number.isFinite(eM) || eM < 0){
-      alert("分鐘數請輸入 0 或正整數"); return;
-    }
-
-    const ch = activeChannel();
-    ch.bosses.push({
-      id: uid("b"),
-      name: name.trim()||"新BOSS",
-      baseMin: Math.round(bM),
-      eventMin: Math.round(eM),
-      location: loc.trim(),
-      note: note.trim(),
-      lastKillAt: now(),
-      starred:false,
-      notified:false
-    });
-    saveLocal(state); render(); await pushToCloud();
-  };
-
-  document.querySelector("#btnAddChannel").onclick = async () => {
-    const name = prompt("分流名稱：", `自訂分流 ${state.channels.length+1}`);
-    if(name === null) return;
-    const ch = { id: uid("ch"), name: (name.trim() || `自訂分流 ${state.channels.length+1}`), bosses: [] };
-    state.channels.push(ch);
-    state.activeChannelId = ch.id;
-    saveLocal(state); render(); await pushToCloud();
-  };
-
-  // =========================
-  // 提醒 + 最近重生：刷新後 15 秒自動開始倒數，但仍保留最近重生直到 5 分鐘自動忽略
-  // =========================
-  function checkAlerts(){
-    const notifyBeforeMin = state.settings.notifyBeforeMin ?? 0;
-    const notifyMs = notifyBeforeMin * 60 * 1000;
-
-    const AUTO_START_MS = 15 * 1000;      // ✅ 刷新後 15 秒自動開始下一輪倒數
-    const AUTO_IGNORE_MS = 5 * 60 * 1000; // ✅ 最近重生保留 5 分鐘後自動忽略
-
-    let changed = false;
-    const t = now();
-
-    for(const ch of state.channels){
-      for(const b of ch.bosses){
-        const m = respawnMin(b);
-        if(m <= 0) continue;
-
-        const tNext = nextSpawn(b);
-        const remain = tNext - t;
-
-        // 即將刷新提醒（只提醒一次）
-        if(remain > 0 && remain <= notifyMs && !b.notified){
-          b.notified = true;
-          beep("warn");
-          changed = true;
-        }
-
-        if(remain <= 0){
-          // ✅ 刷新瞬間：加入「最近重生」（只做一次）
-          if(!b._recentShownAt && !b._recentIgnored){
-            b._recentShownAt = t;
-            beep("spawn");
-            changed = true;
-          }
-
-          // ✅ 超過 15 秒：自動開始下一輪倒數（但不移出最近重生）
-          if(b._recentShownAt && (t - b._recentShownAt >= AUTO_START_MS)){
-            // 避免每秒一直重置：只做一次（lastKillAt 推到近現在）
-            if(Math.abs((b.lastKillAt ?? 0) - t) > 2000){
-              b.lastKillAt = t;
-              b.notified = false;
-              changed = true;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AION 2 Boss 重生計時器 (活動專用版)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans TC', 'sans-serif'],
+                    },
+                    colors: {
+                        aion: {
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            accent: '#38bdf8', /* 天族藍 */
+                            asmodian: '#f87171', /* 魔族紅 */
+                            abyss: '#a78bfa', /* 深淵紫 */
+                            gold: '#fbbf24',
+                            danger: '#ef4444',
+                            success: '#22c55e',
+                            event: '#f472b6' /* 活動粉紅 */
+                        }
+                    }
+                }
             }
-          }
-
-          // ✅ 超過 5 分鐘：自動忽略移出最近重生
-          if(b._recentShownAt && (t - b._recentShownAt >= AUTO_IGNORE_MS)){
-            b._recentIgnored = true;
-            delete b._recentShownAt;
-            changed = true;
-          }
         }
-      }
-    }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        /* Table Styles */
+        .boss-row {
+            transition: background-color 0.2s ease;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .boss-row:hover {
+            background-color: rgba(30, 41, 59, 0.8);
+        }
+        .boss-row.spawned {
+            background-color: rgba(34, 197, 94, 0.1);
+            border-left: 4px solid #22c55e;
+        }
+        .boss-row.cooling {
+             border-left: 4px solid transparent;
+        }
+        .boss-row.alert {
+            animation: flash-red 1s infinite;
+            border-left: 4px solid #fbbf24;
+        }
+        @keyframes flash-red {
+            0%, 100% { background-color: rgba(251, 191, 36, 0.1); }
+            50% { background-color: rgba(251, 191, 36, 0.25); }
+        }
 
-    if(changed){
-      saveLocal(state);
-      pushToCloud();
-      render();
-    }
-  }
+        .status-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .7; }
+        }
+        
+        /* Custom Checkbox Styles */
+        .filter-checkbox:checked + div {
+            background-color: var(--active-bg);
+            border-color: var(--active-border);
+            color: white;
+        }
+        .filter-checkbox:checked + div .check-icon {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* Toggle Switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #f472b6;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #f472b6;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
 
-  // =========================
-  // 房間加入/連結（加入既有房間不覆蓋 + UI lock + 加入序/房主/線上）
-  // =========================
-  const roomInput = document.querySelector("#roomId");
-  const joinBtn = document.querySelector("#btnJoin");
-  const copyBtn = document.querySelector("#btnCopyLink");
+    <!-- Navbar -->
+    <nav class="bg-slate-900 border-b border-slate-700 sticky top-0 z-50 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-dragon text-aion-accent text-2xl mr-3"></i>
+                    <span class="font-bold text-xl tracking-wider text-white hidden md:inline">AION 2 <span class="text-aion-event text-sm ml-1 font-bold">活動 BOSS 追蹤器</span></span>
+                    <span class="font-bold text-xl tracking-wider text-white md:hidden">A2 <span class="text-aion-event text-sm ml-1">Event</span></span>
+                </div>
+                <div class="flex space-x-2 items-center">
+                    <!-- Sound Toggle -->
+                    <button id="soundToggleBtn" onclick="toggleSound()" class="bg-slate-800 hover:bg-slate-700 text-slate-400 p-2 rounded-md transition border border-slate-600 mr-2" title="開啟/關閉提示音">
+                        <i class="fa-solid fa-volume-xmark" id="soundIcon"></i>
+                    </button>
+                    
+                    <!-- Multiplayer Button -->
+                    <button onclick="openRoomModal()" id="multiplayerBtn" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-md text-sm font-medium transition flex items-center border border-slate-600 mr-2">
+                        <i class="fa-solid fa-users mr-2"></i> <span id="roomStatusText">多人連線</span>
+                    </button>
 
-  function getRoomFromURL(){
-    const u = new URL(location.href);
-    const r = u.searchParams.get("room");
-    return r ? r.trim() : "";
-  }
+                    <!-- Import Button -->
+                    <label class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-md text-sm font-medium transition flex items-center cursor-pointer mr-2">
+                        <i class="fa-solid fa-file-import mr-2"></i> 匯入
+                        <input type="file" accept=".json" class="hidden" onchange="importData(this)">
+                    </label>
 
-  joinBtn.onclick = async () => {
-    const r = (roomInput.value || "").trim();
-    if(!r || r.length < 3){
-      alert("Room ID 至少 3 字元");
-      return;
-    }
+                    <!-- Export Button -->
+                    <button onclick="exportData()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-md text-sm font-medium transition flex items-center mr-2">
+                        <i class="fa-solid fa-file-export mr-2"></i> 匯出
+                    </button>
 
-    if(unsubRoom){ unsubRoom(); unsubRoom = null; }
-    stopPresence();
+                    <button onclick="openModal()" class="bg-aion-event hover:bg-pink-500 text-slate-900 px-3 py-2 rounded-md text-sm font-bold transition flex items-center shadow-lg shadow-pink-500/20">
+                        <i class="fa-solid fa-plus mr-1"></i> 新增
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
 
-    roomId = r;
+    <!-- Audio Element -->
+    <audio id="alertSound" src="data:audio/wav;base64,UklGRl9vT1BXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...." preload="auto"></audio>
 
-    setLocked(true, "同步中，操作已暫時鎖定…");
-    setCloudStatus("正在連線房間…", null);
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        
+        <!-- Filter Section -->
+        <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 mb-6 backdrop-blur-sm">
+            <div class="flex flex-col xl:flex-row justify-between items-center gap-4">
+                <!-- Filters -->
+                <div class="flex items-center gap-2 overflow-x-auto w-full xl:w-auto pb-2 xl:pb-0 scrollbar-hide">
+                    <span class="text-slate-400 font-medium mr-2 whitespace-nowrap"><i class="fa-solid fa-filter mr-2"></i>顯示種族:</span>
+                    <label class="cursor-pointer relative group flex-shrink-0">
+                        <input type="checkbox" value="elyos" checked onchange="renderBosses()" class="filter-checkbox sr-only">
+                        <div style="--active-bg: #0ea5e9; --active-border: #38bdf8;" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-400 transition-all hover:bg-slate-700 flex items-center select-none group-hover:border-slate-500">
+                            <i class="fa-solid fa-check mr-2 transition-all opacity-0 scale-50 w-0 check-icon"></i>
+                            <span class="group-hover:text-white">天族</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer relative group flex-shrink-0">
+                        <input type="checkbox" value="asmodian" checked onchange="renderBosses()" class="filter-checkbox sr-only">
+                        <div style="--active-bg: #dc2626; --active-border: #f87171;" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-400 transition-all hover:bg-slate-700 flex items-center select-none group-hover:border-slate-500">
+                            <i class="fa-solid fa-check mr-2 transition-all opacity-0 scale-50 w-0 check-icon"></i>
+                            <span class="group-hover:text-white">魔族</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer relative group flex-shrink-0">
+                        <input type="checkbox" value="abyss" checked onchange="renderBosses()" class="filter-checkbox sr-only">
+                        <div style="--active-bg: #7c3aed; --active-border: #a78bfa;" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-400 transition-all hover:bg-slate-700 flex items-center select-none group-hover:border-slate-500">
+                            <i class="fa-solid fa-check mr-2 transition-all opacity-0 scale-50 w-0 check-icon"></i>
+                            <span class="group-hover:text-white">深淵</span>
+                        </div>
+                    </label>
+                </div>
+                
+                <!-- Controls Right Side -->
+                <div class="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-end">
+                    <!-- Event Mode Label (Static now) -->
+                    <div class="flex items-center mr-4 bg-slate-900/80 px-4 py-2 rounded-lg border border-aion-event/30">
+                         <span class="text-sm font-bold text-aion-event flex items-center">
+                            <i class="fa-solid fa-bolt mr-2 animate-pulse"></i> 活動模式
+                        </span>
+                    </div>
+                    <div class="text-sm text-slate-400 font-mono bg-slate-900 px-3 py-2 rounded border border-slate-700 whitespace-nowrap min-w-[80px] text-center" id="clock">--:--:--</div>
+                </div>
+            </div>
+        </div>
 
-    try{
-      const existed = await ensureRoomAndJoinMeta();
-      setCloudStatus(existed ? "已加入房間，正在同步資料…" : "已建立新房間，初始化中…", null);
+        <!-- Recent Activity Panel -->
+        <div id="recentActivityPanel" class="hidden mb-6 bg-slate-800/80 border border-yellow-500/30 rounded-xl overflow-hidden shadow-lg animate-fade-in-down">
+            <div class="bg-yellow-500/10 px-6 py-3 border-b border-yellow-500/20 flex justify-between items-center">
+                <h3 class="text-yellow-400 font-bold text-sm uppercase tracking-wide flex items-center">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i> 最近異動 (自動判定擊殺)
+                </h3>
+                <span class="text-xs text-slate-400 bg-slate-900/50 px-2 py-1 rounded">顯示最新 10 筆 (10分鐘後自動忽略)</span>
+            </div>
+            <div id="recentActivityList" class="divide-y divide-slate-700/50 max-h-60 overflow-y-auto"></div>
+        </div>
 
-      startRoomListen();
-      await startPresence();
+        <!-- Boss List (Table View) -->
+        <div class="bg-slate-800 rounded-xl overflow-hidden shadow-xl border border-slate-700">
+            <div class="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-900 border-b border-slate-700 text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:grid">
+                <div class="col-span-4 lg:col-span-3">Boss 名稱 [地區]</div>
+                <div class="col-span-2 text-center">種族</div>
+                <div class="col-span-2 text-center">活動週期</div>
+                <div class="col-span-2 text-center">狀態 / 倒數</div>
+                <div class="col-span-2 lg:col-span-3 text-right">操作</div>
+            </div>
+            <div id="bossList" class="divide-y divide-slate-700"></div>
+        </div>
 
-      const u = new URL(location.href);
-      u.searchParams.set("room", roomId);
-      history.replaceState(null, "", u.toString());
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-20 bg-slate-800/30 rounded-2xl border border-dashed border-slate-700 mt-6">
+            <div class="inline-block p-6 rounded-full bg-slate-800 mb-4 shadow-lg"><i class="fa-solid fa-dragon text-4xl text-slate-600"></i></div>
+            <h3 class="text-xl font-bold text-slate-400">目前沒有顯示的 Boss</h3>
+            <p class="text-slate-500 mt-2">可能是篩選條件未勾選，或是資料已被清除。</p>
+            <button onclick="loadDefaults()" class="mt-4 text-aion-accent hover:underline text-sm font-medium">重置為 天族/魔族/深淵 預設資料</button>
+        </div>
+    </main>
 
-      render();
-    }catch(e){
-      console.error(e);
-      setCloudStatus("加入失敗（看 Console/Rules）", false);
-      setLocked(false);
-    }
-  };
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-slate-500 text-sm">
+            <p>資料儲存於您的瀏覽器 (Local Storage) 或 Firebase (若已連線)。</p>
+            <p class="mt-1">&copy; 2025 AION 2 Boss Tracker.</p>
+        </div>
+    </footer>
 
-  copyBtn.onclick = async () => {
-    const r = roomId || (roomInput.value || "").trim();
-    if(!r){ alert("先輸入 Room ID"); return; }
-    const u = new URL(location.href);
-    u.searchParams.set("room", r);
-    await navigator.clipboard.writeText(u.toString());
-    alert("已複製房間連結！");
-  };
+    <!-- Modals (All modals remain the same structure) -->
+    <!-- Add/Edit Modal -->
+    <div id="bossModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity backdrop-blur-sm" aria-hidden="true" onclick="closeModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-slate-700">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-bold text-white mb-6 border-b border-slate-700 pb-2" id="modalTitle">新增 Boss</h3>
+                    <form id="bossForm" onsubmit="handleFormSubmit(event)">
+                        <input type="hidden" id="bossId">
+                        <div class="mb-5">
+                            <label class="block text-sm font-medium text-slate-400 mb-2">所屬種族</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="cursor-pointer"><input type="radio" name="region" value="elyos" class="peer sr-only" required><div class="text-center py-2 rounded border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-sky-900 peer-checked:border-sky-500 peer-checked:text-sky-400 transition-all hover:bg-slate-700">天族</div></label>
+                                <label class="cursor-pointer"><input type="radio" name="region" value="asmodian" class="peer sr-only"><div class="text-center py-2 rounded border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-red-900 peer-checked:border-red-500 peer-checked:text-red-400 transition-all hover:bg-slate-700">魔族</div></label>
+                                <label class="cursor-pointer"><input type="radio" name="region" value="abyss" class="peer sr-only" checked><div class="text-center py-2 rounded border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-purple-900 peer-checked:border-purple-500 peer-checked:text-purple-400 transition-all hover:bg-slate-700">深淵</div></label>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="bossName" class="block text-sm font-medium text-slate-400 mb-1">Boss 名稱</label>
+                            <input type="text" id="bossName" required class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-aion-accent" placeholder="例如: 憤怒的庫爾卡">
+                        </div>
+                        <!-- Simplified Time Input: Only Event Time -->
+                        <div class="mb-4 p-4 bg-slate-900/50 rounded border border-slate-700/50">
+                            <h4 class="text-sm font-bold text-aion-event mb-2 border-b border-slate-700 pb-1">活動重生時間</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="text-xs text-slate-500">小時</label><input type="number" id="eventHours" min="0" value="0" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white focus:border-aion-event"></div>
+                                <div><label class="text-xs text-slate-500">分鐘</label><input type="number" id="eventMinutes" min="0" max="59" value="0" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white focus:border-aion-event"></div>
+                            </div>
+                            <input type="hidden" id="normalHours" value="0"><input type="hidden" id="normalMinutes" value="0">
+                        </div>
+                        <div class="mb-4">
+                            <label for="bossLocation" class="block text-sm font-medium text-slate-400 mb-1">詳細位置</label>
+                            <input type="text" id="bossLocation" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-aion-accent" placeholder="例如: 龍界南部">
+                        </div>
+                        <div class="bg-slate-900 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-700 -mx-6 -mb-4 mt-6">
+                            <button type="button" onclick="document.getElementById('bossForm').dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}))" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-aion-accent text-base font-medium text-slate-900 hover:bg-sky-500 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm shadow-lg shadow-sky-500/20">儲存</button>
+                            <button type="button" onclick="closeModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-800 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">取消</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
-  // init
-  document.querySelector("#roleLabel").textContent = "—";
-  document.querySelector("#joinIndexLabel").textContent = "—";
-  document.querySelector("#onlineLabel").textContent = "0";
-  setCloudStatus("未連線", false);
+    <!-- Manual Time Edit Modal -->
+    <div id="timeEditModal" class="fixed inset-0 z-[60] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4 text-center sm:block sm:p-0">
+             <div class="fixed inset-0 bg-gray-900 bg-opacity-80 transition-opacity backdrop-blur-sm" aria-hidden="true" onclick="closeTimeEditModal()"></div>
+             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+             <div class="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm w-full border border-slate-700">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-bold text-white mb-4">修改擊殺時間</h3>
+                    <p class="text-sm text-slate-400 mb-4">請輸入過去的擊殺時間 (例如 1430, 143010)</p>
+                    <input type="hidden" id="editTimeBossId">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-400 mb-1">擊殺時間 (HHMM 或 HHMMSS)</label>
+                        <input type="text" id="manualKillTime" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-aion-accent font-mono text-lg" placeholder="例如: 1430" maxlength="8">
+                        <p class="text-xs text-slate-500 mt-2">支援格式: 1430 (=14:30:00), 143010 (=14:30:10)</p>
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                         <button type="button" onclick="closeTimeEditModal()" class="inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-800 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none sm:text-sm">取消</button>
+                         <button type="button" onclick="saveManualTime()" class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-aion-accent text-base font-medium text-slate-900 hover:bg-sky-400 focus:outline-none sm:text-sm font-bold">確認修改</button>
+                    </div>
+                </div>
+             </div>
+        </div>
+    </div>
 
-  const urlRoom = getRoomFromURL();
-  if(urlRoom) roomInput.value = urlRoom;
+    <!-- Room ID Modal -->
+    <div id="roomModal" class="fixed inset-0 z-[70] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4 text-center sm:block sm:p-0">
+             <div class="fixed inset-0 bg-gray-900 bg-opacity-80 transition-opacity backdrop-blur-sm" aria-hidden="true" onclick="closeRoomModal()"></div>
+             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+             <div class="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm w-full border border-slate-700">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-bold text-white mb-2">多人連線設定</h3>
+                    <p class="text-sm text-slate-400 mb-4">輸入相同的房間名稱，即可與隊友同步資料。</p>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-400 mb-1">房間名稱 (例如: 軍團名)</label>
+                        <input type="text" id="roomNameInput" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-aion-accent">
+                    </div>
+                    <div class="flex justify-end gap-3 mt-4">
+                         <button type="button" onclick="closeRoomModal()" class="inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-800 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none sm:text-sm">取消</button>
+                         <button type="button" onclick="connectToRoom()" class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-aion-accent text-base font-medium text-slate-900 hover:bg-sky-400 focus:outline-none sm:text-sm font-bold">連線</button>
+                    </div>
+                </div>
+             </div>
+        </div>
+    </div>
 
-  render();
-  setInterval(() => { checkAlerts(); render(); }, 1000);
+    <!-- Confirm Modal -->
+    <div id="confirmModal" class="fixed inset-0 z-[80] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4 text-center sm:block sm:p-0">
+             <div class="fixed inset-0 bg-gray-900 bg-opacity-80 transition-opacity backdrop-blur-sm" aria-hidden="true"></div>
+             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+             <div class="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm w-full border border-slate-700">
+                <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 text-center">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-slate-700 mb-4">
+                        <i class="fa-solid fa-skull text-xl text-aion-danger"></i>
+                    </div>
+                    <h3 class="text-lg leading-6 font-bold text-white mb-2" id="confirmTitle">確認</h3>
+                    <p class="text-sm text-slate-300" id="confirmMessage">確定要執行此操作嗎？</p>
+                </div>
+                <div class="bg-slate-900 px-4 py-3 sm:px-6 flex flex-row gap-3">
+                    <button type="button" id="confirmBtn" class="flex-1 inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-aion-accent text-base font-medium text-slate-900 hover:bg-sky-400 focus:outline-none sm:text-sm font-bold">確定</button>
+                    <button type="button" onclick="closeConfirmModal()" class="flex-1 inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-800 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none sm:text-sm">取消</button>
+                </div>
+             </div>
+        </div>
+    </div>
 
-  // 解鎖音效（瀏覽器規定）
-  window.addEventListener("pointerdown", () => {
-    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
-  }, { once: false });
-</script>
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border-l-4 border-aion-accent text-white px-6 py-4 rounded shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center">
+        <i class="fa-solid fa-circle-info mr-3 text-aion-accent"></i>
+        <span id="toastMsg">Notification</span>
+    </div>
+
+    <!-- Firebase Logic Module -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // User Provided Config
+        const firebaseConfig = {
+          apiKey: "AIzaSyCFasj7ww7AnnQ2QYw0jyv79kJ4aFCf7QI",
+          authDomain: "aion222.firebaseapp.com",
+          projectId: "aion222",
+          storageBucket: "aion222.firebasestorage.app",
+          messagingSenderId: "988326833096",
+          appId: "1:988326833096:web:6943b8c172c4c43b8eeefd",
+          measurementId: "G-8R4VCLCYNC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'aion2_tracker_v1';
+
+        let unsubscribeSnapshot = null;
+        let currentRoom = localStorage.getItem('aion2_room_id') || '';
+        let isFirstLoad = true; 
+
+        window.initFirebase = async () => {
+             // For personal Firebase projects, make sure Anonymous Auth is enabled in the Firebase Console
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+                if(window.showToast) window.showToast("Firebase 連線錯誤: 請檢查後台是否開啟匿名登入或網域白名單");
+            }
+        };
+
+        window.joinRoom = (roomId) => {
+            if (!auth.currentUser) {
+                if(window.showToast) window.showToast("尚未連線至伺服器，請稍後再試");
+                return; 
+            }
+            if (unsubscribeSnapshot) unsubscribeSnapshot(); 
+
+            currentRoom = roomId;
+            localStorage.setItem('aion2_room_id', roomId);
+            isFirstLoad = true;
+            
+            if(window.updateConnectionUI) window.updateConnectionUI(true, roomId);
+
+            // Path: artifacts/{appId}/public/data/boss_trackers/{roomId}
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boss_trackers', roomId);
+            
+            unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    // Room exists - Download cloud data
+                    const data = docSnap.data();
+                    if(window.updateLocalDataFromSync) window.updateLocalDataFromSync(data);
+                    
+                    if (isFirstLoad) {
+                        if(window.showToast) window.showToast(`已加入房間 ${roomId}，同步雲端資料`);
+                        isFirstLoad = false;
+                    }
+                } else {
+                    // Room doesn't exist - Upload local data (Initialize room)
+                    if (isFirstLoad) {
+                        if(window.syncLocalToRemote) window.syncLocalToRemote(); 
+                        if(window.showToast) window.showToast(`房間 ${roomId} 不存在，已建立並上傳本地資料`);
+                        isFirstLoad = false;
+                    }
+                }
+            }, (error) => {
+                console.error("Sync error:", error);
+                // Permission errors (like auth/admin-restricted) will trigger this
+                if(window.showToast) window.showToast("同步錯誤: 權限不足或網域未授權");
+                if(window.updateConnectionUI) window.updateConnectionUI(false, roomId);
+            });
+        };
+
+        window.disconnectFromRoom = () => {
+             if (unsubscribeSnapshot) unsubscribeSnapshot();
+             unsubscribeSnapshot = null;
+             currentRoom = '';
+             localStorage.removeItem('aion2_room_id');
+             if(window.updateConnectionUI) window.updateConnectionUI(false, '');
+             if(window.showToast) window.showToast("已斷開連線，目前使用本地資料");
+        };
+
+        window.saveToRemote = async (data) => {
+            if (!auth.currentUser || !currentRoom) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boss_trackers', currentRoom);
+                await setDoc(docRef, {
+                    ...data,
+                    lastUpdated: Date.now()
+                });
+            } catch (e) {
+                console.error("Save error", e);
+            }
+        };
+
+        // Initialize
+        window.initFirebase();
+        
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // If we had a room saved, rejoin it automatically
+                if (currentRoom) {
+                    window.joinRoom(currentRoom);
+                }
+            }
+        });
+    </script>
+
+    <!-- Main Logic Script -->
+    <script>
+        // --- Sound Management ---
+        let isSoundEnabled = false;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playAlertSound() {
+            if (!isSoundEnabled) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
+            oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        }
+
+        function toggleSound() {
+            isSoundEnabled = !isSoundEnabled;
+            const btn = document.getElementById('soundToggleBtn');
+            const icon = document.getElementById('soundIcon');
+            if (isSoundEnabled) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                btn.classList.replace('text-slate-400', 'text-aion-accent');
+                btn.classList.replace('bg-slate-800', 'bg-slate-700');
+                icon.classList.replace('fa-volume-xmark', 'fa-volume-high');
+                playAlertSound(); 
+                showToast('提示音效已開啟');
+            } else {
+                btn.classList.replace('text-aion-accent', 'text-slate-400');
+                btn.classList.replace('bg-slate-700', 'bg-slate-800');
+                icon.classList.replace('fa-volume-high', 'fa-volume-xmark');
+                showToast('提示音效已關閉');
+            }
+            localStorage.setItem('aion2_sound_enabled', isSoundEnabled);
+        }
+
+        // --- Data Management ---
+        let bosses = [];
+        let autoKilledBosses = []; 
+        let alertedBosses = []; 
+        let isEventMode = true; // Force Event Mode ON
+        let isFirebaseConnected = false;
+        
+        const regionConfig = {
+            elyos: { label: '天族', color: 'text-sky-400', border: 'border-sky-500/30', bg: 'bg-sky-900/20' },
+            asmodian: { label: '魔族', color: 'text-red-400', border: 'border-red-500/30', bg: 'bg-red-900/20' },
+            abyss: { label: '深淵', color: 'text-purple-400', border: 'border-purple-500/30', bg: 'bg-purple-900/20' }
+        };
+
+        // --- Multiplayer Functions ---
+        function openRoomModal() {
+            const current = localStorage.getItem('aion2_room_id') || '';
+            document.getElementById('roomNameInput').value = current;
+            document.getElementById('roomModal').classList.remove('hidden');
+        }
+
+        function closeRoomModal() {
+            document.getElementById('roomModal').classList.add('hidden');
+        }
+
+        function connectToRoom() {
+            const roomName = document.getElementById('roomNameInput').value.trim();
+            if(!roomName) {
+                showToast('請輸入房間名稱');
+                return;
+            }
+            if (window.joinRoom) {
+                window.joinRoom(roomName);
+                closeRoomModal();
+                showToast('正在連線...');
+            } else {
+                showToast('系統初始化中，請稍後');
+            }
+        }
+        
+        function disconnectFromRoom() {
+            if(window.disconnectFromRoom) {
+                window.disconnectFromRoom();
+            }
+        }
+
+        // Called by Firebase module
+        window.updateConnectionUI = (connected, roomName) => {
+            isFirebaseConnected = connected;
+            const btn = document.getElementById('multiplayerBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const statusText = document.getElementById('roomStatusText');
+            if (connected) {
+                btn.classList.remove('bg-slate-700');
+                btn.classList.add('bg-green-700', 'hover:bg-green-600', 'border-green-500');
+                statusText.innerText = `已連線: ${roomName}`;
+                disconnectBtn.classList.remove('hidden');
+                disconnectBtn.classList.add('flex');
+            } else {
+                btn.classList.remove('bg-green-700', 'hover:bg-green-600', 'border-green-500');
+                btn.classList.add('bg-slate-700');
+                statusText.innerText = '多人連線';
+                disconnectBtn.classList.add('hidden');
+                disconnectBtn.classList.remove('flex');
+            }
+        };
+
+        // Called by Firebase module on remote update
+        window.updateLocalDataFromSync = (data) => {
+            if (data.bosses) {
+                bosses = data.bosses;
+                bosses.forEach(b => {
+                    if(b.normalIntervalMin) b.normalIntervalMin = Number(b.normalIntervalMin);
+                    if(b.eventIntervalMin) b.eventIntervalMin = Number(b.eventIntervalMin);
+                });
+            }
+            if (data.autoKilledBosses) {
+                let parsed = data.autoKilledBosses;
+                if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'number') {
+                    const now = Date.now();
+                    parsed = parsed.map(id => ({ id: id, time: now }));
+                }
+                autoKilledBosses = parsed || [];
+            }
+            localStorage.setItem('aion2_boss_tracker', JSON.stringify(bosses));
+            localStorage.setItem('aion2_auto_killed', JSON.stringify(autoKilledBosses));
+            renderBosses();
+            renderRecentActivity();
+        };
+
+        // Called by Firebase module if room is empty
+        window.syncLocalToRemote = () => {
+            if (window.saveToRemote) {
+                window.saveToRemote({ bosses, autoKilledBosses });
+            }
+        };
+
+        // Expose toast to window for module
+        window.showToast = showToast;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadBosses();
+            const savedSound = localStorage.getItem('aion2_sound_enabled');
+            if (savedSound === 'true') toggleSound();
+            setInterval(updateTimers, 1000);
+            updateClock();
+            setInterval(updateClock, 1000);
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            
+            const manualInput = document.getElementById('manualKillTime');
+            manualInput.value = now.toISOString().slice(0, 16);
+            
+            // Add Enter key listener for manual time input
+            manualInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    saveManualTime();
+                }
+            });
+        });
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('zh-TW', {hour12: false});
+        }
+
+        function loadBosses() {
+            const storedData = localStorage.getItem('aion2_boss_tracker');
+            const storedAutoKilled = localStorage.getItem('aion2_auto_killed');
+            
+            if (storedAutoKilled) {
+                try {
+                    let parsed = JSON.parse(storedAutoKilled);
+                    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'number') {
+                        const now = Date.now();
+                        parsed = parsed.map(id => ({ id: id, time: now }));
+                    }
+                    autoKilledBosses = parsed || [];
+                } catch(e) { autoKilledBosses = []; }
+            }
+
+            if (storedData === null) {
+                loadDefaults(true);
+                return;
+            }
+            if (storedData) {
+                try {
+                    bosses = JSON.parse(storedData);
+                    bosses.forEach(b => {
+                        if(b.normalIntervalMin) b.normalIntervalMin = Number(b.normalIntervalMin);
+                        if(b.eventIntervalMin) b.eventIntervalMin = Number(b.eventIntervalMin);
+                    });
+                } catch (e) { bosses = []; }
+            }
+            renderBosses();
+            renderRecentActivity();
+        }
+
+        function saveBosses() {
+            // Save to LocalStorage
+            localStorage.setItem('aion2_boss_tracker', JSON.stringify(bosses));
+            localStorage.setItem('aion2_auto_killed', JSON.stringify(autoKilledBosses));
+            
+            // Save to Firebase if connected
+            if (isFirebaseConnected && window.saveToRemote) {
+                window.saveToRemote({ bosses, autoKilledBosses });
+            }
+            
+            renderBosses();
+            renderRecentActivity();
+        }
+
+        function loadDefaults(silent = false) {
+             const now = Date.now();
+            const defaults = [
+                // --- 天族 (Elyos) ---
+                { id: 1, name: '西側凱勒農', location: '坎塔斯溪谷', region: 'elyos', normalIntervalMin: 60, eventIntervalMin: 30, lastKill: 0, nextSpawn: 0 },
+                { id: 2, name: '東側涅凱爾', location: '坎塔斯溪谷', region: 'elyos', normalIntervalMin: 60, eventIntervalMin: 30, lastKill: 0, nextSpawn: 0 },
+                { id: 3, name: '腐朽的庫塔爾', location: '艾爾倫河沼澤', region: 'elyos', normalIntervalMin: 60, eventIntervalMin: 30, lastKill: 0, nextSpawn: 0 },
+                { id: 4, name: '盛開的柯林', location: '艾爾倫河中游', region: 'elyos', normalIntervalMin: 120, eventIntervalMin: 60, lastKill: 0, nextSpawn: 0 },
+                { id: 5, name: '護衛兵提甘特', location: '要塞廢墟', region: 'elyos', normalIntervalMin: 180, eventIntervalMin: 90, lastKill: 0, nextSpawn: 0 },
+                { id: 6, name: '狂鬥士庫森', location: '要塞廢墟', region: 'elyos', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 7, name: '祭司長加爾新', location: '要塞廢墟', region: 'elyos', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 8, name: '血獠牙普寧', location: '托爾巴斯森林', region: 'elyos', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 9, name: '憤怒的薩呂', location: '托爾巴斯森林', region: 'elyos', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 10, name: '學者拉兀拉', location: '阿爾拉烏部落', region: 'elyos', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 11, name: '追擊者塔兀羅', location: '阿爾拉烏部落', region: 'elyos', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 12, name: '森林戰士烏剌姆', location: '阿爾拉烏部落', region: 'elyos', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 13, name: '黑色觸手拉瓦', location: '阿爾塔米亞峽谷', region: 'elyos', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 14, name: '叛教者雷拉', location: '阿爾塔米亞高原', region: 'elyos', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 15, name: '百夫長戴米羅斯', location: '阿爾塔米亞高原', region: 'elyos', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 16, name: '神聖的安薩斯', location: '阿爾塔米亞高原', region: 'elyos', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 17, name: '收穫管理者莫夏夫', location: '德拉那栽培地', region: 'elyos', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 18, name: '監視兵器克納許', location: '德拉那栽培地', region: 'elyos', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 19, name: '研究官塞特蘭', location: '納希德軍團要塞', region: 'elyos', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 20, name: '幻夢卡西亞', location: '幻影神庭院', region: 'elyos', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 21, name: '沉默塔爾坦', location: '阿爾塔米亞高原南部', region: 'elyos', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 22, name: '靈魂支配者卡沙帕', location: '阿爾塔米亞高原東部', region: 'elyos', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 23, name: '軍團長拉格塔', location: '紅色森林', region: 'elyos', normalIntervalMin: 1440, eventIntervalMin: 720, lastKill: 0, nextSpawn: 0 },
+                { id: 24, name: '永恆卡爾吐亞', location: '永恆之島', region: 'elyos', normalIntervalMin: 1440, eventIntervalMin: 720, lastKill: 0, nextSpawn: 0 },
+
+                // --- 魔族 (Asmodian) ---
+                { id: 25, name: '融化的達納樂', location: '德雷得奇安失事地', region: 'asmodian', normalIntervalMin: 60, eventIntervalMin: 30, lastKill: 0, nextSpawn: 0 },
+                { id: 26, name: '黑色戰士阿埃德', location: '無名墓地', region: 'asmodian', normalIntervalMin: 60, eventIntervalMin: 30, lastKill: 0, nextSpawn: 0 },
+                { id: 27, name: '忠實的拉吉特', location: '聖所監視哨所', region: 'asmodian', normalIntervalMin: 60, eventIntervalMin: 30, lastKill: 0, nextSpawn: 0 },
+                { id: 28, name: '狂戰士瓦格', location: '聖所監視哨所', region: 'asmodian', normalIntervalMin: 120, eventIntervalMin: 60, lastKill: 0, nextSpawn: 0 },
+                { id: 29, name: '血戰士蘭那爾', location: '瑪斯蘭森林', region: 'asmodian', normalIntervalMin: 180, eventIntervalMin: 90, lastKill: 0, nextSpawn: 0 },
+                { id: 30, name: '捕食者加爾桑', location: '瑪斯蘭森林', region: 'asmodian', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 31, name: '欺瞞者特里德', location: '烏爾通海姆', region: 'asmodian', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 32, name: '藍色水波凱匹那', location: '淨化之森', region: 'asmodian', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 33, name: '沉默塔爾坦', location: '淨化之森', region: 'asmodian', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 34, name: '參謀官勒沙納', location: '德拉那克圖斯', region: 'asmodian', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 35, name: '總監督官努塔', location: '德拉那克圖斯', region: 'asmodian', normalIntervalMin: 240, eventIntervalMin: 120, lastKill: 0, nextSpawn: 0 },
+                { id: 36, name: '別動隊長令克斯', location: '巴斯斐爾特廢墟', region: 'asmodian', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 37, name: '褻瀆者諾布魯德', location: '巴斯斐爾特廢墟', region: 'asmodian', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 38, name: '亡魂執政官亞克席歐斯', location: '巴斯斐爾特廢墟', region: 'asmodian', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 39, name: '中毒的哈迪倫', location: '法夫奈特埋藏地', region: 'asmodian', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 40, name: '靈魂支配者卡沙帕', location: '法夫奈特埋藏地', region: 'asmodian', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 41, name: '處刑者巴爾西恩', location: '葛利巴德峽谷西部', region: 'asmodian', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 42, name: '德拉坎部隊兵器古魯塔', location: '葛利巴德峽谷東部', region: 'asmodian', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 43, name: '百戰老將舒札坎', location: '黑爪部落', region: 'asmodian', normalIntervalMin: 360, eventIntervalMin: 180, lastKill: 0, nextSpawn: 0 },
+                { id: 44, name: '祕傳卡魯卡', location: '黑爪部落', region: 'asmodian', normalIntervalMin: 480, eventIntervalMin: 240, lastKill: 0, nextSpawn: 0 },
+                { id: 45, name: '黑闇比修貝達', location: '拉格塔要塞', region: 'asmodian', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 46, name: '軍團長拉格塔', location: '拉格塔要塞', region: 'asmodian', normalIntervalMin: 1440, eventIntervalMin: 720, lastKill: 0, nextSpawn: 0 },
+                { id: 47, name: '敏銳的敘拉克', location: '因派圖西姆廣場', region: 'asmodian', normalIntervalMin: 720, eventIntervalMin: 360, lastKill: 0, nextSpawn: 0 },
+                { id: 48, name: '不滅卡爾吐亞', location: '不滅之島', region: 'asmodian', normalIntervalMin: 1440, eventIntervalMin: 720, lastKill: 0, nextSpawn: 0 },
+
+                // --- 深淵 (Abyss) ---
+                { id: 49, name: '監視者卡伊拉', location: '艾雷修藍塔下層', region: 'abyss', normalIntervalMin: 60, eventIntervalMin: 60, lastKill: 0, nextSpawn: 0 },
+                { id: 50, name: '精靈王阿格羅', location: '希埃爾右翼', region: 'abyss', normalIntervalMin: 1440, eventIntervalMin: 720, lastKill: 0, nextSpawn: 0 },
+                { 
+                    id: 51, 
+                    name: '守護神將納赫瑪', 
+                    location: '艾雷修藍塔之根', 
+                    region: 'abyss', 
+                    fixedSchedule: true, 
+                    // 0=Sun, 6=Sat. hour in 24h format.
+                    normalSchedule: [{day: 0, hour: 20, min: 0}], 
+                    eventSchedule: [{day: 6, hour: 20, min: 0}, {day: 0, hour: 20, min: 0}],
+                    lastKill: 0, 
+                    nextSpawn: 0 
+                },
+            ];
+            
+            defaults.forEach(b => {
+                if (b.fixedSchedule) {
+                    b.nextSpawn = calculateNextFixedSpawn(b);
+                }
+            });
+
+            bosses = defaults;
+            saveBosses();
+            if (!silent) showToast('已載入 完整BOSS (含深淵) 資料');
+        }
+
+        // --- Core Logic (Event Mode ONLY) ---
+        // Removed toggleEventMode and always forcing recalc based on event time
+
+        function recalculateAllSpawns() {
+            const now = Date.now();
+            bosses.forEach(boss => {
+                if (boss.fixedSchedule) {
+                     boss.nextSpawn = calculateNextFixedSpawn(boss);
+                } else if (boss.lastKill > 0) {
+                    // Always use event interval
+                    const interval = boss.eventIntervalMin; 
+                    const newNextSpawn = boss.lastKill + (interval * 60000);
+                    boss.nextSpawn = newNextSpawn;
+                }
+            });
+            alertedBosses = [];
+            saveBosses();
+            // showToast('已強制切換為活動時間'); // Not needed on every load
+        }
+
+        function calculateNextFixedSpawn(boss) {
+            if (!boss.fixedSchedule) return 0;
+            // Always use event schedule
+            const schedules = boss.eventSchedule; 
+            if (!schedules || schedules.length === 0) return 0;
+
+            const now = new Date();
+            let nextDate = null;
+
+            for (let sch of schedules) {
+                let d = new Date(now);
+                d.setHours(sch.hour, sch.min, 0, 0);
+                let dayDiff = sch.day - now.getDay();
+                if (dayDiff < 0) dayDiff += 7;
+                if (dayDiff === 0 && d <= now) dayDiff = 7;
+                d.setDate(now.getDate() + dayDiff);
+                
+                if (!nextDate || d < nextDate) nextDate = d;
+            }
+            return nextDate ? nextDate.getTime() : 0;
+        }
+
+        function getActiveFilters() {
+            const checkboxes = document.querySelectorAll('.filter-checkbox');
+            const active = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) active.push(cb.value);
+            });
+            return active;
+        }
+
+        // --- Render Functions ---
+        function renderRecentActivity() {
+            const panel = document.getElementById('recentActivityPanel');
+            const list = document.getElementById('recentActivityList');
+            list.innerHTML = '';
+            
+            const validEntries = autoKilledBosses.filter(entry => bosses.find(b => b.id === entry.id));
+            if(validEntries.length !== autoKilledBosses.length) {
+                autoKilledBosses = validEntries;
+            }
+
+            const sortedEntries = [...autoKilledBosses].sort((a, b) => b.time - a.time).slice(0, 10);
+            
+            if (sortedEntries.length === 0) {
+                panel.classList.add('hidden');
+                return;
+            }
+            
+            panel.classList.remove('hidden');
+            
+            sortedEntries.forEach(entry => {
+                const boss = bosses.find(b => b.id === entry.id);
+                if (!boss) return;
+
+                const row = document.createElement('div');
+                row.className = 'px-6 py-3 flex items-center justify-between bg-slate-800/50';
+                
+                const minsAgo = Math.floor((Date.now() - entry.time) / 60000);
+                const timeText = minsAgo < 1 ? '剛剛' : `${minsAgo} 分鐘前`;
+
+                row.innerHTML = `
+                    <div class="flex-1">
+                        <div class="text-white font-bold flex items-center">
+                            <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2 animate-pulse"></span>
+                            ${boss.name} <span class="ml-2 text-xs text-slate-500 font-normal">(${timeText})</span>
+                        </div>
+                        <div class="text-xs text-slate-400">系統自動判定擊殺 - 請確認狀態</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="confirmAutoKill(${boss.id})" class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded transition flex items-center">
+                            <i class="fa-solid fa-check mr-1"></i> 補刀
+                        </button>
+                        <button onclick="dismissAutoKill(${boss.id})" class="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-white text-xs rounded transition flex items-center">
+                            <i class="fa-solid fa-xmark mr-1"></i> 忽略
+                        </button>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        function confirmAutoKill(id) {
+            const boss = bosses.find(b => b.id === id);
+            if (boss) {
+                const now = Date.now();
+                // Always use event interval
+                const interval = boss.eventIntervalMin;
+                const safeInterval = interval > 0 ? interval : 60;
+                boss.lastKill = now;
+                boss.nextSpawn = now + (safeInterval * 60 * 1000);
+            }
+            autoKilledBosses = autoKilledBosses.filter(entry => entry.id !== id);
+            saveBosses();
+            showToast('已更新擊殺時間為現在');
+        }
+
+        function dismissAutoKill(id) {
+            autoKilledBosses = autoKilledBosses.filter(entry => entry.id !== id);
+            saveBosses();
+            showToast('已忽略通知');
+        }
+
+        function renderBosses() {
+            const listContainer = document.getElementById('bossList');
+            const emptyState = document.getElementById('emptyState');
+            const activeFilters = getActiveFilters();
+            listContainer.innerHTML = '';
+
+            const filteredBosses = bosses.filter(b => activeFilters.includes(b.region || 'abyss'));
+
+            if (filteredBosses.length === 0) {
+                document.querySelector('.bg-slate-800.rounded-xl').classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            document.querySelector('.bg-slate-800.rounded-xl').classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            const now = Date.now();
+            filteredBosses.sort((a, b) => {
+                const aSpawned = a.nextSpawn <= now;
+                const bSpawned = b.nextSpawn <= now;
+                if (aSpawned && !bSpawned) return -1;
+                if (!aSpawned && bSpawned) return 1;
+                return a.nextSpawn - b.nextSpawn;
+            });
+
+            filteredBosses.forEach(boss => {
+                const isSpawned = boss.nextSpawn <= now;
+                const regionStyle = regionConfig[boss.region] || regionConfig['abyss'];
+                
+                let intervalText = '';
+                if (boss.fixedSchedule) {
+                    intervalText = '固定重生';
+                } else {
+                    // Always use event interval
+                    const currentInterval = boss.eventIntervalMin;
+                    intervalText = `${formatInterval(currentInterval)}`;
+                }
+                
+                const row = document.createElement('div');
+                row.className = `boss-row grid grid-cols-12 gap-4 px-6 py-2 items-center ${isSpawned ? 'spawned' : 'cooling'}`;
+                row.id = `row-${boss.id}`;
+
+                row.innerHTML = `
+                    <div class="col-span-4 lg:col-span-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <div class="font-bold text-white text-base truncate" title="${boss.name}">
+                            ${boss.name}
+                            <span class="text-xs text-slate-400 font-normal ml-1">[${boss.location || '未知區域'}]</span>
+                        </div>
+                    </div>
+                    <div class="col-span-2 text-center hidden md:block">
+                        <span class="text-xs font-bold px-2 py-1 rounded border ${regionStyle.bg} ${regionStyle.color} ${regionStyle.border}">
+                            ${regionStyle.label}
+                        </span>
+                    </div>
+                    <div class="col-span-2 text-center text-slate-400 text-sm hidden md:block">
+                        <i class="fa-solid fa-hourglass-half mr-1 text-slate-600"></i>${intervalText}
+                    </div>
+                    <div class="col-span-6 md:col-span-3 text-center flex flex-col md:flex-row items-center justify-center gap-2">
+                        <div class="flex-1">
+                             <div class="font-mono font-bold text-lg md:text-xl timer-display ${isSpawned ? 'text-aion-success' : 'text-aion-gold'}" id="timer-${boss.id}">
+                                ${isSpawned ? '已重生' : '--:--:--'}
+                            </div>
+                            <div class="text-xs text-slate-500 mt-1 hidden sm:block" id="next-time-${boss.id}">
+                                ${isSpawned ? '請盡快擊殺' : `預計: ${formatTimeStr(boss.nextSpawn)}`}
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-600 font-mono hidden md:block" title="上次擊殺時間">
+                            <i class="fa-solid fa-clock-rotate-left mr-1"></i>
+                            <span id="last-kill-${boss.id}">${boss.lastKill > 0 ? formatTimeStr(boss.lastKill) : '--:--'}</span>
+                        </div>
+                    </div>
+                    <div class="col-span-2 lg:col-span-2 flex justify-end gap-2">
+                        <button onclick="openTimeEdit(${boss.id})" class="p-2 text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 rounded transition" title="修改擊殺時間">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="recordKill(${boss.id})" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium rounded transition ${isSpawned ? 'bg-aion-success text-white hover:bg-green-600 shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}">
+                            ${boss.fixedSchedule ? '<i class="fa-solid fa-rotate-right"></i>' : (isSpawned ? '<i class="fa-solid fa-skull mr-2"></i> 擊殺' : '<i class="fa-solid fa-arrow-rotate-right"></i>')}
+                        </button>
+                        <button onclick="recordKill(${boss.id})" class="sm:hidden p-2 rounded transition ${isSpawned ? 'bg-aion-success text-white shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'bg-slate-700 text-slate-300'}">
+                            <i class="fa-solid fa-skull"></i>
+                        </button>
+                        <div class="relative">
+                            <button onclick="toggleMenu(${boss.id})" class="p-2 text-slate-500 hover:text-white transition">
+                                <i class="fa-solid fa-ellipsis-vertical"></i>
+                            </button>
+                            <div id="menu-${boss.id}" class="hidden absolute right-0 mt-2 w-32 bg-slate-800 rounded-md shadow-xl z-20 border border-slate-600 overflow-hidden">
+                                <button onclick="editBoss(${boss.id})" class="block w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700">編輯資料</button>
+                                <button onclick="deleteBoss(${boss.id})" class="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700">刪除 Boss</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                listContainer.appendChild(row);
+            });
+        }
+
+        // --- Helper & Timer Logic ---
+        function updateTimers() {
+            const now = Date.now();
+            let autoKillChanged = false;
+
+            const initialLen = autoKilledBosses.length;
+            autoKilledBosses = autoKilledBosses.filter(entry => (now - entry.time) < 600000);
+            if (autoKilledBosses.length !== initialLen) autoKillChanged = true;
+            
+            bosses.forEach(boss => {
+                const timerEl = document.getElementById(`timer-${boss.id}`);
+                const nextTimeEl = document.getElementById(`next-time-${boss.id}`);
+                const lastKillEl = document.getElementById(`last-kill-${boss.id}`);
+                
+                if (!timerEl) return;
+
+                if (lastKillEl && boss.lastKill > 0) {
+                     lastKillEl.innerText = formatTimeStr(boss.lastKill);
+                }
+
+                if (boss.nextSpawn <= now && !boss.fixedSchedule && boss.lastKill > 0) { 
+                    const timeSinceSpawn = now - boss.nextSpawn;
+                    if (timeSinceSpawn > 15000) {
+                        // Always use event interval
+                        const interval = boss.eventIntervalMin;
+                        const safeInterval = interval > 0 ? interval : 60;
+                        boss.lastKill = boss.nextSpawn; 
+                        boss.nextSpawn = boss.lastKill + (safeInterval * 60 * 1000);
+                        if (!autoKilledBosses.some(entry => entry.id === boss.id)) {
+                            autoKilledBosses.push({ id: boss.id, time: now });
+                            autoKillChanged = true;
+                        }
+                        alertedBosses = alertedBosses.filter(id => id !== boss.id);
+                        saveBosses();
+                        showToast(`已自動判定 ${boss.name} 擊殺 (逾時)`);
+                        return; 
+                    }
+                }
+
+                const timeDiff = boss.nextSpawn - now;
+                if (!boss.fixedSchedule && boss.nextSpawn > now && timeDiff <= 180000 && timeDiff > 0) {
+                    if (!alertedBosses.includes(boss.id)) {
+                        playAlertSound();
+                        alertedBosses.push(boss.id);
+                        const row = document.getElementById(`row-${boss.id}`);
+                        if(row) row.classList.add('alert');
+                        showToast(`${boss.name} 即將重生 (3分鐘)`);
+                    }
+                } else if (boss.nextSpawn <= now || timeDiff > 185000) {
+                    if (alertedBosses.includes(boss.id)) {
+                        alertedBosses = alertedBosses.filter(id => id !== boss.id);
+                        const row = document.getElementById(`row-${boss.id}`);
+                        if(row) row.classList.remove('alert');
+                    }
+                }
+
+                const updateStatus = (spawned) => {
+                    const row = timerEl.closest('.boss-row');
+                    if(spawned) {
+                        timerEl.innerText = '已重生';
+                        timerEl.className = 'font-mono font-bold text-lg md:text-xl timer-display text-aion-success status-badge';
+                        if(nextTimeEl) nextTimeEl.innerText = '請盡快擊殺';
+                        if(row) {
+                            row.classList.add('spawned');
+                            row.classList.remove('cooling');
+                            row.classList.remove('alert');
+                        }
+                    } else {
+                        const diff = boss.nextSpawn - now;
+                        const hours = Math.floor(diff / (1000 * 60 * 60));
+                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                        const timeStr = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+                        timerEl.innerText = timeStr;
+                        // Always use event style
+                        timerEl.className = `font-mono font-bold text-lg md:text-xl timer-display text-aion-event`;
+                        if(nextTimeEl) nextTimeEl.innerText = `預計: ${formatTimeStr(boss.nextSpawn)}`;
+                        if(row) {
+                            row.classList.remove('spawned');
+                            row.classList.add('cooling');
+                        }
+                    }
+                };
+
+                if (boss.fixedSchedule) {
+                     updateStatus(now >= boss.nextSpawn);
+                } else {
+                     updateStatus(boss.nextSpawn <= now);
+                }
+            });
+
+            if (autoKillChanged) saveBosses();
+        }
+
+        function recordKill(id) {
+            const boss = bosses.find(b => b.id === id);
+            if (!boss) return;
+
+            if (boss.fixedSchedule) {
+                 boss.nextSpawn = calculateNextFixedSpawn(boss);
+                 saveBosses();
+                 showToast(`已重置 ${boss.name} 至下個時段`);
+                 return;
+            }
+
+            const now = Date.now();
+            // Always use event interval
+            const interval = boss.eventIntervalMin;
+            const safeInterval = interval > 0 ? interval : 60;
+
+            boss.lastKill = now;
+            boss.nextSpawn = now + (safeInterval * 60 * 1000);
+            
+            autoKilledBosses = autoKilledBosses.filter(entry => entry.id !== id);
+            alertedBosses = alertedBosses.filter(bid => bid !== id);
+            
+            const row = document.getElementById(`row-${id}`);
+            if(row) row.classList.remove('alert');
+
+            saveBosses();
+            showToast(`已記錄 ${boss.name} 擊殺！`);
+        }
+
+        // --- Manual Time Edit ---
+        function openTimeEdit(id) {
+            const boss = bosses.find(b => b.id === id);
+            if (!boss) return;
+            document.getElementById('editTimeBossId').value = id;
+            document.getElementById('manualKillTime').value = '';
+            document.getElementById('timeEditModal').classList.remove('hidden');
+            setTimeout(() => { document.getElementById('manualKillTime').focus(); }, 100);
+        }
+
+        function closeTimeEditModal() {
+            document.getElementById('timeEditModal').classList.add('hidden');
+        }
+
+        function saveManualTime() {
+            const id = parseInt(document.getElementById('editTimeBossId').value);
+            const inputVal = document.getElementById('manualKillTime').value.trim();
+            if (!inputVal) { showToast("請輸入時間"); return; }
+            
+            const cleanVal = inputVal.replace(/:/g, '');
+            let hh, mm, ss = 0;
+            if (cleanVal.length === 4) {
+                hh = parseInt(cleanVal.substring(0, 2));
+                mm = parseInt(cleanVal.substring(2, 4));
+            } else if (cleanVal.length === 6) {
+                hh = parseInt(cleanVal.substring(0, 2));
+                mm = parseInt(cleanVal.substring(2, 4));
+                ss = parseInt(cleanVal.substring(4, 6));
+            } else {
+                showToast("格式錯誤。請輸入 1430 或 143010"); return;
+            }
+            
+            if (isNaN(hh) || isNaN(mm) || isNaN(ss) || hh > 23 || mm > 59 || ss > 59) {
+                showToast("時間不合法"); return;
+            }
+            
+            const now = new Date();
+            let killTime = new Date(now);
+            killTime.setHours(hh, mm, ss, 0);
+            if (killTime > now) killTime.setDate(killTime.getDate() - 1);
+            
+            const boss = bosses.find(b => b.id === id);
+            if (!boss) return;
+            
+            // Always use event interval
+            const interval = boss.eventIntervalMin;
+            const safeInterval = interval > 0 ? interval : 60;
+            
+            boss.lastKill = killTime.getTime();
+            boss.nextSpawn = boss.lastKill + (safeInterval * 60 * 1000);
+            autoKilledBosses = autoKilledBosses.filter(entry => entry.id !== id);
+            alertedBosses = alertedBosses.filter(bid => bid !== id);
+            
+            const row = document.getElementById(`row-${id}`);
+            if(row) row.classList.remove('alert');
+            
+            saveBosses();
+            closeTimeEditModal();
+            showToast(`已修正 ${boss.name} 時間為 ${pad(hh)}:${pad(mm)}:${pad(ss)}`);
+        }
+
+        // --- Export/Import ---
+        function exportData() {
+            const dataToExport = { bosses: bosses, autoKilledBosses: autoKilledBosses, version: "1.0", timestamp: Date.now() };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "aion2_boss_data.json");
+            document.body.appendChild(downloadAnchorNode); 
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showToast('資料匯出成功');
+        }
+
+        function importData(inputElement) {
+            const file = inputElement.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (!importedData.bosses || !Array.isArray(importedData.bosses)) throw new Error("無效的資料格式");
+                    if (!confirm("確定要匯入此檔案嗎？這將會覆蓋您目前的資料。")) {
+                        inputElement.value = ''; return;
+                    }
+                    bosses = importedData.bosses;
+                    if(importedData.autoKilledBosses) {
+                        autoKilledBosses = importedData.autoKilledBosses;
+                        if(autoKilledBosses.length > 0 && typeof autoKilledBosses[0] === 'number') {
+                             const now = Date.now();
+                             autoKilledBosses = autoKilledBosses.map(id => ({ id: id, time: now }));
+                        }
+                    } else { autoKilledBosses = []; }
+                    saveBosses();
+                    showToast('資料匯入成功');
+                } catch (err) { console.error(err); showToast('匯入失敗：檔案格式錯誤'); }
+                inputElement.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Shared ---
+        let confirmCallback = null;
+        function showConfirm(title, msg, callback) {
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMessage').innerText = msg;
+            document.getElementById('confirmModal').classList.remove('hidden');
+            confirmCallback = callback;
+        }
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            confirmCallback = null;
+        }
+        document.getElementById('confirmBtn').addEventListener('click', () => { if (confirmCallback) confirmCallback(); closeConfirmModal(); });
+
+        let isEditing = false;
+        let editingId = null;
+        function openModal(editMode = false, id = null) {
+            const modal = document.getElementById('bossModal');
+            const title = document.getElementById('modalTitle');
+            const form = document.getElementById('bossForm');
+            modal.classList.remove('hidden');
+            isEditing = editMode;
+            editingId = id;
+            if (editMode) {
+                const boss = bosses.find(b => b.id === id);
+                title.innerText = '編輯 Boss';
+                document.getElementById('bossName').value = boss.name;
+                document.getElementById('bossLocation').value = boss.location;
+                const regionVal = boss.region || 'abyss';
+                const radio = document.querySelector(`input[name="region"][value="${regionVal}"]`);
+                if(radio) radio.checked = true;
+                const nHours = Math.floor(boss.normalIntervalMin / 60);
+                const nMins = boss.normalIntervalMin % 60;
+                document.getElementById('normalHours').value = nHours;
+                document.getElementById('normalMinutes').value = nMins;
+                const eHours = Math.floor((boss.eventIntervalMin || boss.normalIntervalMin) / 60);
+                const eMins = (boss.eventIntervalMin || boss.normalIntervalMin) % 60;
+                document.getElementById('eventHours').value = eHours;
+                document.getElementById('eventMinutes').value = eMins;
+            } else {
+                title.innerText = '新增 Boss';
+                form.reset();
+                document.querySelector('input[name="region"][value="abyss"]').checked = true;
+            }
+        }
+        function closeModal() {
+            document.getElementById('bossModal').classList.add('hidden');
+            document.querySelectorAll('[id^="menu-"]').forEach(el => el.classList.add('hidden')); 
+        }
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('bossName').value;
+            const loc = document.getElementById('bossLocation').value;
+            const region = document.querySelector('input[name="region"]:checked').value;
+            const nh = parseInt(document.getElementById('normalHours').value) || 0;
+            const nm = parseInt(document.getElementById('normalMinutes').value) || 0;
+            const normalTotal = (nh * 60) + nm;
+            const eh = parseInt(document.getElementById('eventHours').value) || 0;
+            const em = parseInt(document.getElementById('eventMinutes').value) || 0;
+            let eventTotal = (eh * 60) + em;
+            if (normalTotal <= 0) { showToast("錯誤：一般重生間隔必須大於 0"); return; }
+            if (eventTotal <= 0) eventTotal = normalTotal;
+            if (isEditing) {
+                const boss = bosses.find(b => b.id === editingId);
+                boss.name = name;
+                boss.location = loc;
+                boss.region = region;
+                boss.normalIntervalMin = normalTotal;
+                boss.eventIntervalMin = eventTotal;
+            } else {
+                bosses.push({
+                    id: Date.now(),
+                    name: name,
+                    location: loc,
+                    region: region,
+                    normalIntervalMin: normalTotal,
+                    eventIntervalMin: eventTotal,
+                    lastKill: 0,
+                    nextSpawn: 0
+                });
+            }
+            saveBosses();
+            closeModal();
+            showToast(isEditing ? 'Boss 資料已更新' : '已新增 Boss');
+        }
+        function editBoss(id) { openModal(true, id); }
+        function deleteBoss(id) {
+            showConfirm('刪除確認', '確定要刪除這個 Boss 嗎？', () => {
+                bosses = bosses.filter(b => b.id !== id);
+                saveBosses();
+                showToast('已刪除');
+            });
+        }
+        function toggleMenu(id) {
+            const menu = document.getElementById(`menu-${id}`);
+            const isHidden = menu.classList.contains('hidden');
+            document.querySelectorAll('[id^="menu-"]').forEach(el => el.classList.add('hidden'));
+            if (isHidden) menu.classList.remove('hidden');
+        }
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.relative')) { document.querySelectorAll('[id^="menu-"]').forEach(el => el.classList.add('hidden')); }
+        });
+        function formatInterval(minutes) {
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            if (h > 0 && m > 0) return `${h}h ${m}m`;
+            if (h > 0) return `${h}h`;
+            return `${m}m`;
+        }
+        function pad(num) { return num.toString().padStart(2, '0'); }
+        function formatTimeStr(timestamp) {
+            const d = new Date(timestamp);
+            return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMsg');
+            msgEl.innerText = msg;
+            toast.classList.remove('opacity-0', 'translate-y-20');
+            setTimeout(() => { toast.classList.add('opacity-0', 'translate-y-20'); }, 3000);
+        }
+    </script>
 </body>
 </html>
