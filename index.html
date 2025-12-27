@@ -360,7 +360,9 @@
 
         let unsubscribeSnapshot = null;
         let currentRoom = localStorage.getItem('aion2_room_id') || '';
-        let isFirstLoad = true; 
+        let lastJoinedRoom = null; // Prevent re-joining same room
+        let isFirstLoad = true;
+        let isDataSynced = false; // Flag to prevent overwriting cloud data with local stale data
 
         window.initFirebase = async () => {
              // For personal Firebase projects, make sure Anonymous Auth is enabled in the Firebase Console
@@ -377,11 +379,19 @@
                 if(window.showToast) window.showToast("尚未連線至伺服器，請稍後再試");
                 return; 
             }
+            
+            // Prevent duplicate listeners for the same room
+            if (roomId === lastJoinedRoom && unsubscribeSnapshot) {
+                return;
+            }
+
             if (unsubscribeSnapshot) unsubscribeSnapshot(); 
 
             currentRoom = roomId;
+            lastJoinedRoom = roomId; // Track active room
             localStorage.setItem('aion2_room_id', roomId);
             isFirstLoad = true;
+            isDataSynced = false; // Reset sync status until we receive data
             
             if(window.updateConnectionUI) window.updateConnectionUI(true, roomId);
 
@@ -389,10 +399,18 @@
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boss_trackers', roomId);
             
             unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+                // Ignore local writes to prevent double-refresh/blinking
+                const hasPendingWrites = docSnap.metadata.hasPendingWrites;
+                
                 if (docSnap.exists()) {
                     // Room exists - Download cloud data
-                    const data = docSnap.data();
-                    if(window.updateLocalDataFromSync) window.updateLocalDataFromSync(data);
+                    if (!hasPendingWrites) {
+                         const data = docSnap.data();
+                         if(window.updateLocalDataFromSync) window.updateLocalDataFromSync(data);
+                    }
+                    
+                    // Allow saving only AFTER we have successfully received cloud data
+                    isDataSynced = true;
                     
                     if (isFirstLoad) {
                         if(window.showToast) window.showToast(`已加入房間 ${roomId}，同步雲端資料`);
@@ -401,9 +419,11 @@
                 } else {
                     // Room doesn't exist - Upload local data (Initialize room)
                     if (isFirstLoad) {
-                        if(window.syncLocalToRemote) window.syncLocalToRemote(); 
+                        // Pass 'true' to force save for initialization
+                        if(window.syncLocalToRemote) window.syncLocalToRemote(true); 
                         if(window.showToast) window.showToast(`房間 ${roomId} 不存在，已建立並上傳本地資料`);
                         isFirstLoad = false;
+                        isDataSynced = true; // We are the source of truth now
                     }
                 }
             }, (error) => {
@@ -411,6 +431,7 @@
                 // Permission errors (like auth/admin-restricted) will trigger this
                 if(window.showToast) window.showToast("同步錯誤: 權限不足或網域未授權");
                 if(window.updateConnectionUI) window.updateConnectionUI(false, roomId);
+                lastJoinedRoom = null; // Allow retry
             });
         };
 
@@ -418,13 +439,24 @@
              if (unsubscribeSnapshot) unsubscribeSnapshot();
              unsubscribeSnapshot = null;
              currentRoom = '';
+             lastJoinedRoom = null;
+             isDataSynced = false;
              localStorage.removeItem('aion2_room_id');
              if(window.updateConnectionUI) window.updateConnectionUI(false, '');
              if(window.showToast) window.showToast("已斷開連線，目前使用本地資料");
         };
 
-        window.saveToRemote = async (data) => {
+        window.saveToRemote = async (data, force = false) => {
             if (!auth.currentUser || !currentRoom) return;
+            
+            // CRITICAL: Do not save if we haven't synced with cloud yet, unless forced (init)
+            // This prevents old local data (e.g. from a week ago) from triggering 'auto-kill' 
+            // logic and overwriting the cloud data immediately upon join.
+            if (!isDataSynced && !force) {
+                console.log("Skipping save: waiting for cloud sync...");
+                return;
+            }
+
             try {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boss_trackers', currentRoom);
                 await setDoc(docRef, {
@@ -442,7 +474,8 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 // If we had a room saved, rejoin it automatically
-                if (currentRoom) {
+                // Only join if we are not already in that room to prevent loops
+                if (currentRoom && currentRoom !== lastJoinedRoom) {
                     window.joinRoom(currentRoom);
                 }
             }
@@ -577,6 +610,7 @@
                 }
                 autoKilledBosses = parsed || [];
             }
+            // CRITICAL: Do NOT call saveBosses() here, it causes loops. Just save to local storage and render.
             localStorage.setItem('aion2_boss_tracker', JSON.stringify(bosses));
             localStorage.setItem('aion2_auto_killed', JSON.stringify(autoKilledBosses));
             renderBosses();
@@ -584,9 +618,9 @@
         };
 
         // Called by Firebase module if room is empty
-        window.syncLocalToRemote = () => {
+        window.syncLocalToRemote = (force = false) => {
             if (window.saveToRemote) {
-                window.saveToRemote({ bosses, autoKilledBosses });
+                window.saveToRemote({ bosses, autoKilledBosses }, force);
             }
         };
 
